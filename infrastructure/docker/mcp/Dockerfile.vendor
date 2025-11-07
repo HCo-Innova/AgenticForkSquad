@@ -1,0 +1,18 @@
+FROM alpine:3.18
+
+RUN apk add --no-cache ca-certificates curl bash
+
+WORKDIR /usr/local/bin
+
+# This Dockerfile expects a pre-downloaded 'tiger' binary placed in the build context
+# at: infrastructure/docker/mcp/tiger
+COPY tiger /usr/local/bin/tiger
+RUN chmod +x /usr/local/bin/tiger
+
+# Copy entrypoint script for authentication and MCP startup
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+EXPOSE 9090
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

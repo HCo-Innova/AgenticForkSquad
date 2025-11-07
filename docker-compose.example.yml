@@ -1,0 +1,164 @@
+# ============================================
+# Docker Compose Example Configuration
+# ============================================
+#
+# This file shows an example setup for local development.
+# Rename to docker-compose.yml or merge with existing configuration.
+#
+# To use:
+# 1. Copy and rename: cp docker-compose.example.yml docker-compose.override.yml
+# 2. Fill in your .env with actual values
+# 3. Run: docker-compose up -d
+#
+# NOTE: For production, use a proper container orchestration platform.
+#
+# ============================================
+networks:
+  afs-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  caddy-data:
+  caddy-config:
+  tiger-config:
+
+services:
+
+  # ----------------------------------
+  # Redis Cache
+  # ----------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: afs-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - afs-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+
+  # ----------------------------------
+  # Backend Server
+  # ----------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: ./infrastructure/docker/backend/Dockerfile.dev
+    container_name: afs-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./secrets/gcp_credentials.json:/app/gcp_credentials.json:ro
+      - tiger-config:/app/.tiger
+    depends_on:
+      - redis
+    env_file:
+      - .env
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/gcp_credentials.json
+      - GIN_MODE=debug
+      - TIGER_MCP_URL=http://mcp:9090
+    networks:
+      - afs-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------
+  # Tiger MCP Server
+  # ----------------------------------
+  mcp:
+    build:
+      context: ./infrastructure/docker/mcp
+      dockerfile: Dockerfile.vendor
+    container_name: afs-mcp
+    restart: unless-stopped
+    volumes:
+      - ./secrets/mcp-config.json:/root/.config/tiger/mcp-config.json:ro
+      - ./secrets/gcp_credentials.json:/root/.config/tiger/gcp_credentials.json:ro
+    ports:
+      - "9090:9090"
+    env_file:
+      - .env
+    environment:
+      - TIGER_MCP_URL=http://0.0.0.0:9090
+      - GOOGLE_APPLICATION_CREDENTIALS=/root/.config/tiger/gcp_credentials.json
+      - CONFIG_DIR=/root/.config/tiger
+    networks:
+      - afs-network
+    healthcheck:
+      test: ["CMD", "tiger", "service", "list"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ----------------------------------
+  # Frontend (React + Vite)
+  # ----------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/frontend/Dockerfile.dev
+    container_name: afs-frontend
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - backend
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=/api
+      - VITE_WS_URL=/ws
+    volumes:
+      - ./frontend:/app:rw
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    networks:
+      - afs-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ----------------------------------
+  # Reverse Proxy (Caddy)
+  # ----------------------------------
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: afs-caddy
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - afs-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true

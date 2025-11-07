@@ -1,0 +1,61 @@
+# ============================================
+# Stage 1: Development Image (Hot Reload)
+# ============================================
+FROM golang:1.25-alpine
+
+# Metadata
+LABEL maintainer="tu-email@ejemplo.com"
+LABEL description="AFS Backend Development Environment"
+
+# Install dependencies
+RUN apk add --no-cache \
+    git \
+    curl \
+    bash \
+    netcat-openbsd \
+    ca-certificates \
+    && rm -rf /var/cache/apk/*
+
+# Create non-root user FIRST
+RUN adduser -D -u 1000 -h /home/devuser devuser
+
+# Set working directory and permissions
+WORKDIR /app
+RUN chown -R devuser:devuser /app
+
+# Install Go tools as root first
+ENV PATH="/go/bin:${PATH}"
+
+# Install Air for live reload in user space
+RUN go install github.com/air-verse/air@latest
+RUN go install github.com/pressly/goose/v3/cmd/goose@latest
+
+# Download and install tiger CLI (as root in /usr/local/bin)
+RUN curl -sSL https://github.com/timescale/tiger-cli/releases/download/v0.15.1/tiger-cli_Linux_arm64.tar.gz \
+    | tar xz -C /usr/local/bin && chmod +x /usr/local/bin/tiger
+
+# Copy dependency files (as root, will chown later)
+COPY backend/go.mod backend/go.sum ./
+RUN chown -R devuser:devuser /app && go mod download && go mod verify
+
+# Copy source code (as root, will chown later)
+COPY backend/ .
+RUN chown -R devuser:devuser /app
+
+# NOW switch to non-root user
+USER devuser
+
+# Expose port
+EXPOSE 8000
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Start Air
+CMD ["air", "-c", ".air.toml"]
+
+# Environment variables for development
+ENV ENV=development
+ENV RUN_MIGRATIONS=true
+

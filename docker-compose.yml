@@ -1,0 +1,240 @@
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  afs-network:
+    driver: bridge
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  redis-data:
+  caddy-data:
+  caddy-config:
+  tiger-config:  # Persist Tiger CLI credentials across Air reloads
+
+# ============================================
+# SERVICES
+# ============================================
+services:
+
+  # --------------------------------------------
+  # One-off DB Migrations (Tiger Cloud via DATABASE_URL)
+  # Includes seed data via idempotent SQL migration
+  # --------------------------------------------
+  migrate:
+    build:
+      context: .
+      dockerfile: ./infrastructure/docker/backend/Dockerfile.dev
+    container_name: afs-migrate
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      PGPASSWORD: ${TIGER_DB_PASSWORD:-}
+      DATABASE_URL: ${DATABASE_URL:-}
+    working_dir: /app
+    entrypoint: ["sh","-lc","/go/bin/goose -dir ./migrations postgres \"$DATABASE_URL\" up"]
+    networks:
+      - afs-network
+
+  # --------------------------------------------
+  # Redis
+  # --------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: afs-redis
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-afs_redis_pass}
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - afs-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-afs_redis_pass}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  # --------------------------------------------
+  # Backend (Go + Fiber + Hot Reload)
+  # --------------------------------------------
+  backend:
+      container_name: backend
+      build:
+          context: .
+          dockerfile: ./infrastructure/docker/backend/Dockerfile.dev
+      ports:
+          - "8000:8000"
+      volumes:
+          - ./backend:/app
+          - ./secrets/gcp_credentials.json:/app/gcp_credentials.json:ro
+          - tiger-config:/app/.tiger
+      extra_hosts:
+          - "host.docker.internal:host-gateway"
+      depends_on:
+          migrate:
+              condition: service_completed_successfully
+          redis:
+              condition: service_started
+          mcp:
+              condition: service_healthy
+      env_file:
+          - .env
+      environment:
+          - GOOGLE_APPLICATION_CREDENTIALS=/app/gcp_credentials.json
+          - GIN_MODE=debug
+          - DATABASE_URL=${DATABASE_URL:-}
+          - TIGER_MCP_URL=http://mcp:9090
+          - TIGER_PROJECT_ID=${TIGER_PROJECT_ID:-}
+          - TIGER_SERVICE_ID=${TIGER_SERVICE_ID:-}
+          - TIGER_MAIN_SERVICE=${TIGER_MAIN_SERVICE:-}
+          - TIGER_DB_HOST=${TIGER_DB_HOST:-}
+          - TIGER_DB_PORT=${TIGER_DB_PORT:-}
+          - TIGER_DB_USER=${TIGER_DB_USER:-}
+          - TIGER_DB_PASSWORD=${TIGER_DB_PASSWORD:-}
+          - TIGER_DB_NAME=${TIGER_DB_NAME:-}
+          - TIGER_DB_SSLMODE=${TIGER_DB_SSLMODE:-require}
+          - CONFIG_DIR=/app/.tiger
+      healthcheck:
+          test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+          interval: 10s
+          timeout: 5s
+          retries: 5
+      networks:
+          - afs-network
+  # --------------------------------------------
+  # Tiger MCP (local / in-cluster MCP server)
+  # Tiger Cloud MCP server that provides fork, PITR, and query execution capabilities.
+  mcp:
+    build:
+      context: ./infrastructure/docker/mcp
+      dockerfile: Dockerfile.vendor
+    container_name: afs-mcp
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./secrets/mcp-config.json:/root/.config/tiger/mcp-config.json:ro
+      - ./secrets/gcp_credentials.json:/root/.config/tiger/gcp_credentials.json:ro
+    ports:
+      - "9090:9090"
+    environment:
+      - TIGER_MCP_URL=http://0.0.0.0:9090
+      - TIGER_PROJECT_ID=${TIGER_PROJECT_ID:-}
+      - TIGER_SERVICE_ID=${TIGER_SERVICE_ID:-}
+      - TIGER_MAIN_SERVICE=${TIGER_MAIN_SERVICE:-}
+      - TIGER_DB_HOST=${TIGER_DB_HOST:-}
+      - TIGER_DB_PORT=${TIGER_DB_PORT:-}
+      - TIGER_DB_USER=${TIGER_DB_USER:-}
+      - TIGER_DB_PASSWORD=${TIGER_DB_PASSWORD:-}
+      - TIGER_DB_NAME=${TIGER_DB_NAME:-}
+      - TIGER_DB_SSLMODE=${TIGER_DB_SSLMODE:-require}
+      - TIGER_PUBLIC_KEY=${TIGER_PUBLIC_KEY:-}
+      - TIGER_SECRET_KEY=${TIGER_SECRET_KEY:-}
+      - GOOGLE_APPLICATION_CREDENTIALS=/root/.config/tiger/gcp_credentials.json
+      - CONFIG_DIR=/root/.config/tiger
+    networks:
+      - afs-network
+    healthcheck:
+      test: ["CMD", "tiger", "service", "list"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+  # --------------------------------------------
+  # Frontend (React + Vite)
+  # --------------------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/frontend/Dockerfile.dev
+    container_name: afs-frontend
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - backend
+    environment:
+      NODE_ENV: development
+      VITE_API_URL: /api/v1
+      VITE_WS_URL: /ws
+    volumes:
+      - ./frontend:/app:rw
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    networks:
+      - afs-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # --------------------------------------------
+  # Reverse Proxy (Caddy)
+  # --------------------------------------------
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: afs-caddy
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - afs-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.25'
+          memory: 64M

@@ -1,0 +1,36 @@
+.PHONY: help deps migrate seed setup clean logs verify
+
+help: ## Show this help
+	@echo "📋 Available commands:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+deps: ## Install Go dependencies
+	@echo "📦 Installing dependencies..."
+	@docker compose exec backend go mod download
+	@docker compose exec backend go mod tidy
+	@echo "✅ Dependencies installed"
+
+migrate: ## Run database migrations
+	@echo "🔄 Running migrations..."
+	@docker compose exec backend psql "host=afs-postgres port=5432 user=afs_user password=${POSTGRES_PASSWORD:-afs_password} dbname=afs_dev sslmode=disable" -f /app/migrations/001_create_schema.sql
+	@echo "✅ Migrations completed"
+
+seed: ## Seed database with test data
+	@echo "🌱 Seeding database (10K orders)..."
+	@docker compose exec backend go run /app/cmd/seed/main.go
+	@echo "✅ Database seeded"
+
+setup: migrate seed ## Full database setup (migrate + seed)
+	@echo "✅ Database ready!"
+
+clean: ## Clean all data from database
+	@echo "🧹 Cleaning database..."
+	@docker compose exec backend psql "host=afs-postgres port=5432 user=afs_user password=${POSTGRES_PASSWORD:-afs_password} dbname=afs_dev sslmode=disable" -c "TRUNCATE users, orders, payments RESTART IDENTITY CASCADE"
+	@echo "✅ Database cleaned"
+
+logs: ## Show backend logs
+	@docker compose logs -f backend
+
+verify: ## Verify database content
+	@echo "🔍 Verifying database..."
+	@docker compose exec backend psql "host=afs-postgres port=5432 user=afs_user password=${POSTGRES_PASSWORD:-afs_password} dbname=afs_dev sslmode=disable" -c "SELECT 'users' as table_name, COUNT(*) as count FROM users UNION ALL SELECT 'orders', COUNT(*) FROM orders UNION ALL SELECT 'payments', COUNT(*) FROM payments;"

@@ -1,0 +1,205 @@
+# ==================================
+# AFS - Git Ignore Rules
+# ==================================
+# ⚠️  DO NOT commit: .env files, credentials, keys, tokens, passwords
+
+# 🔐 SECRETS - CRITICAL
+# ========================
+# Environment variables (NEVER commit)
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+.env.staging
+.env.*.bak
+
+# Credentials (ALL credential files)
+secrets/
+!secrets/.gitkeep
+gcp_credentials.json
+mcp-config.json
+*.p8
+*.p12
+*.pem
+*.key
+*.crt
+*.jks
+*.pfx
+*.pub
+
+# Frontend env files
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+
+# Backend env files
+backend/.env
+backend/.env.local
+
+# API keys and tokens
+*_token.txt
+*_key.txt
+*_secret.txt
+*_credentials*
+
+# 🔙 Backend (Go)
+# ========================
+backend/tmp/
+backend/vendor/
+backend/bin/
+backend/*.test
+backend/.air.toml.local
+backend/air.toml
+
+# Go build outputs
+*.o
+*.a
+*.so
+*.dll
+*.exe
+
+# 🎨 Frontend (Node.js / React / Vite)
+# ========================
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+frontend/.eslintcache
+frontend/.cache
+frontend/.turbo
+
+# 📝 Logs
+# ========================
+*.log
+logs/
+*.log.*
+
+# 🖥️  OS Files
+# ========================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.AppleDouble
+.LSOverride
+
+# 🔧 IDE/Editor
+# ========================
+.vscode/
+.idea/
+*.iml
+*.sublime-project
+*.sublime-workspace
+.eclipse
+.project
+.settings/
+
+# 🐳 Docker
+# ========================
+.docker-data/
+docker-compose.override.yml
+.dockerignore
+
+# 💾 Database
+# ========================
+# SQL files (except migrations)
+*.sql
+!migrations/*.sql
+*.dump
+*.sql.bak
+backups/
+
+# 📦 Coverage & Testing
+# ========================
+coverage/
+*.coverprofile
+coverage.out
+coverage.html
+**/*.out
+*.coverage
+
+# ⏱️  Temporary Files
+# ========================
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+# 🎯 Project Specific
+# ========================
+# Tiger CLI config (if generated locally)
+.tiger/
+.tigerrc
+
+# Goose migrations state
+.goose_*
+
+# Air watch
+.air.toml.local
+
+# Redis snapshots (if local)
+dump.rdb
+
+# 🔍 macOS
+# ========================
+._*
+.Spotlight-V100
+.Trashes
+.VolumeIcon.icns
+
+# 🪟 Windows
+# ========================
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ⬆️  CI/CD
+# ========================
+.github/workflows/*.log
+.gitlab-ci.yml.local
+.circleci/config.yml.local
+
+# 🚨 SECURITY: Explicitly ignore common credential patterns
+# ========================
+# AWS
+.aws/credentials
+.aws/config
+
+# GCP
+.config/gcloud/
+gcloud_config/
+
+# Azure
+.azure/
+*.pfx
+
+# Terraform
+*.tfvars
+*.tfstate
+.terraform/
+
+# Vault
+.vault-token
+vault.json
+
+# SSH
+.ssh/
+id_rsa*
+*.pub
+
+# Private keys (any format)
+private_key*
+private.key*
+
+# 🎯 DO NOT accidentally commit these
+# ========================
+# Entire environment dumps
+.env.dump
+.secrets.dump
+credentials.json
+config.json
+secrets.json

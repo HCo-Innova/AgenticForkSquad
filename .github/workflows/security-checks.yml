@@ -1,0 +1,83 @@
+name: Security Checks
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+
+jobs:
+  secrets-scan:
+    name: Scan for Secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for secrets
+        run: |
+          # Check for common secret patterns
+          echo "🔐 Scanning for secrets..."
+          
+          if git diff origin/main HEAD --name-only 2>/dev/null | grep -E "\.env|secrets/" > /dev/null; then
+            echo "❌ Found .env or secrets/ files in diff"
+            exit 1
+          fi
+          
+          # Check for hardcoded credentials
+          if grep -r "password=" . --include="*.go" --include="*.ts" --include="*.tsx" 2>/dev/null | \
+             grep -v "example\|template\|your_" > /dev/null; then
+            echo "⚠️  Warning: Found potential hardcoded credentials in code"
+            grep -r "password=" . --include="*.go" --include="*.ts" --include="*.tsx" | head -5
+            # Don't fail, just warn for now
+          fi
+          
+          echo "✅ Secrets scan passed"
+
+  gitignore-check:
+    name: Verify .gitignore
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify critical files are ignored
+        run: |
+          echo "📋 Checking .gitignore..."
+          
+          # Check that critical patterns are in .gitignore
+          for pattern in ".env" "secrets/" "gcp_credentials.json"; do
+            if ! grep -q "^$pattern\|^$pattern/" .gitignore; then
+              echo "❌ Missing .gitignore pattern: $pattern"
+              exit 1
+            fi
+          done
+          
+          echo "✅ .gitignore check passed"
+
+  no-tracked-secrets:
+    name: Check Tracked Files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify no secrets are tracked
+        run: |
+          echo "🔍 Checking for tracked secret files..."
+          
+          # These files should NEVER be tracked in git
+          FORBIDDEN_FILES=(
+            ".env"
+            "gcp_credentials.json"
+            "mcp-config.json"
+            "secrets/"
+          )
+          
+          for file in "${FORBIDDEN_FILES[@]}"; do
+            if git ls-files --error-unmatch "$file" 2>/dev/null; then
+              echo "❌ Found tracked file that should be ignored: $file"
+              exit 1
+            fi
+          done
+          
+          echo "✅ No forbidden files are tracked"
