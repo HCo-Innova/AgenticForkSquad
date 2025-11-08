@@ -6,13 +6,8 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-    minify: 'esbuild',
-    target: 'ES2020',
-    rollupOptions: {
-      output: {
-        manualChunks: undefined
-      }
-    }
+    minify: 'terser',
+    target: 'ES2020'
   },
   server: {
     host: '0.0.0.0',
