@@ -425,18 +425,18 @@ Validación:
 MCP: Con USE_TIGER_CLOUD=true y variables de MCP configuradas, el Connect() no debe fallar.
 LLM: Requiere VERTEX_PROJECT_ID, VERTEX_LOCATION y variables: GEMINI_CEREBRO_MODEL, GEMINI_OPERATIVO_MODEL, GEMINI_BULK_MODEL.
 
-- ✅ Listo si: pipelines listos para ejecutar
+- Listo si: pipelines listos para ejecutar
 
 
 ---
 
-*** Conversación #44: Ejecución del Despliegue ***
+✅ *** Conversación #44: Ejecución del Despliegue ***
 
 Debes consultar estos doc para la tarea:
 
 Tarea: Desplegar backend y frontend
 
-Ubicación: Plataformas seleccionadas (Tiger Cloud, Railway, Vercel)
+Ubicación: Plataformas seleccionadas Vercel
 
 Alcance/Funcionalidad:
 - Ejecutar despliegue y pruebas post-deploy (API/WS/health)
