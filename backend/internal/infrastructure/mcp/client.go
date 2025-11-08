@@ -74,7 +74,16 @@ func New(c *cfgpkg.Config, httpClient interface{}) (*MCPClient, error) {
 
 // Connect verifies tiger CLI is available and authenticated.
 // If credentials are provided, it runs tiger auth login to store them.
+// In production (e.g., Railway), tiger CLI may not be available - skip MCP auth.
 func (c *MCPClient) Connect(ctx context.Context) error {
+	// Check if tiger CLI is available
+	statusArgs := []string{"--version"}
+	statusCmd := exec.CommandContext(ctx, "tiger", statusArgs...)
+	if err := statusCmd.Run(); err != nil {
+		fmt.Printf("[Tiger Auth] ⚠️  Tiger CLI not available - skipping MCP auth (using direct PostgreSQL)\n")
+		return nil // Don't fail, just use direct DB connections
+	}
+
 	// If credentials provided, login first
 	if c.publicKey != "" && c.secretKey != "" && c.projectID != "" {
 		fmt.Printf("[Tiger Auth] Attempting login with credentials...\n")
@@ -87,19 +96,20 @@ func (c *MCPClient) Connect(ctx context.Context) error {
 		}
 		loginCmd := exec.CommandContext(ctx, "tiger", loginArgs...)
 		if output, err := loginCmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("mcp: tiger auth login failed: %w (output: %s)", err, string(output))
+			fmt.Printf("[Tiger Auth] ⚠️  Login failed, continuing with direct PostgreSQL: %v\n", err)
+			return nil // Don't fail
 		}
 		fmt.Printf("[Tiger Auth] ✅ Login successful\n")
 	}
 	
 	// Check status after login
 	fmt.Printf("[Tiger Auth] Verifying authentication status...\n")
-	statusArgs := []string{"--config-dir", c.configDir, "auth", "status"}
-	statusCmd := exec.CommandContext(ctx, "tiger", statusArgs...)
+	statusCmd = exec.CommandContext(ctx, "tiger", []string{"--config-dir", c.configDir, "auth", "status"}...)
 	
 	output, err := statusCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("mcp: tiger auth status failed: %w (output: %s)", err, string(output))
+		fmt.Printf("[Tiger Auth] Status check failed (non-fatal): %v\n", err)
+		return nil
 	}
 	fmt.Printf("[Tiger Auth] Status: %s\n", string(output))
 	return nil
