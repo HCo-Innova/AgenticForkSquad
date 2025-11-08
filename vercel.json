@@ -1,7 +1,8 @@
 {
-  "buildCommand": "cd frontend && rm -rf node_modules package-lock.json && npm install && npm run build",
+  "buildCommand": "cd frontend && npm ci --force && npm run build",
   "outputDirectory": "frontend/dist",
-  "installCommand": "cd frontend && npm install",
+  "installCommand": "cd frontend && npm ci --force",
+  "nodeVersion": "20.10.0",
   "rewrites": [
     {
       "source": "/(.*)",
