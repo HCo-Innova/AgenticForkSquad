@@ -18,6 +18,7 @@
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^4.3.1",
     "@rollup/rollup-linux-x64-gnu": "^4.17.0",
+    "terser": "^5.31.0",
     "typescript": "^5.9.3",
     "vite": "^4.5.0"
   }
