@@ -80,7 +80,7 @@ func (c *MCPClient) Connect(ctx context.Context) error {
 	statusArgs := []string{"--version"}
 	statusCmd := exec.CommandContext(ctx, "tiger", statusArgs...)
 	if err := statusCmd.Run(); err != nil {
-		fmt.Printf("[Tiger Auth] ⚠️  Tiger CLI not available - skipping MCP auth (using direct PostgreSQL)\n")
+		fmt.Printf("[Tiger Auth] ℹ️  Tiger CLI unavailable - using direct PostgreSQL connections\n")
 		return nil // Don't fail, just use direct DB connections
 	}
 
