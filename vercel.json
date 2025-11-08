@@ -1,7 +1,7 @@
 {
-  "buildCommand": "cd frontend && npm ci --force && npm run build",
+  "buildCommand": "cd frontend && npm ci && npm run build",
   "outputDirectory": "frontend/dist",
-  "installCommand": "cd frontend && npm ci --force",
+  "installCommand": "cd frontend && npm ci",
   "nodeVersion": "20.10.0",
   "rewrites": [
     {
