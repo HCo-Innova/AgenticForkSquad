@@ -13,7 +13,6 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /root/
 
 COPY --from=builder /app/server .
-COPY backend/migrations ./migrations
 
 EXPOSE 8000
 
