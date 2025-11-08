@@ -95,7 +95,7 @@ func (c *MCPClient) Connect(ctx context.Context) error {
 			"--project-id", c.projectID,
 		}
 		loginCmd := exec.CommandContext(ctx, "tiger", loginArgs...)
-		if output, err := loginCmd.CombinedOutput(); err != nil {
+		if _, err := loginCmd.CombinedOutput(); err != nil {
 			fmt.Printf("[Tiger Auth] ⚠️  Login failed, continuing with direct PostgreSQL: %v\n", err)
 			return nil // Don't fail
 		}
