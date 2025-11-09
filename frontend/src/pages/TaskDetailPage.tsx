@@ -5,6 +5,7 @@ import { useAgentsByTask } from '../hooks/useAgentsByTask'
 import { useQueryClient } from '@tanstack/react-query'
 import { useWebSocket, type WSEvent } from '../hooks/useWebSocket'
 import OptimizationDashboard from '../components/optimization/OptimizationDashboard'
+import SQLViewer from '../components/SQLViewer'
 
 type TimelineItem = { ts: string; type: string; payload?: Record<string, any> }
 
@@ -68,7 +69,10 @@ export default function TaskDetailPage() {
         <h2>Task #{data?.id}</h2>
         <p>Type: {data?.type}</p>
         <p>Status: {data?.status}</p>
-        <p>Target Query: <code>{data?.target_query}</code></p>
+        <div style={{ marginTop: 16 }}>
+          <h4>Target Query</h4>
+          <SQLViewer code={data?.target_query || ''} height="200px" />
+        </div>
         <p>Created: {data?.created_at}</p>
       </div>
 

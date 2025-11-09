@@ -3,11 +3,12 @@ module github.com/tuusuario/afs-challenge
 go 1.25
 
 require (
-	github.com/brianvoe/gofakeit/v6 v6.28.0
 	github.com/gofiber/fiber/v2 v2.52.5
 	github.com/gofiber/websocket/v2 v2.2.1
+	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/lib/pq v1.10.9
+	golang.org/x/crypto v0.24.0
 )
 
 require (

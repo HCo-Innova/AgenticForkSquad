@@ -14,6 +14,7 @@ type Config struct {
 	UseTigerCloud   bool
 	TigerMainService string
 	TigerMCPURL      string
+	JWTSecret       string
 }
 
 func buildTigerURLFromEnv() string {
@@ -42,6 +43,7 @@ func Load() *Config {
         UseTigerCloud:   getEnvBool("USE_TIGER_CLOUD", false),
         TigerMainService: getEnv("TIGER_MAIN_SERVICE", ""),
         TigerMCPURL:      getEnv("TIGER_MCP_URL", ""),
+        JWTSecret:        getEnv("JWT_SECRET", "default-secret-change-in-production"),
     }
 }
 

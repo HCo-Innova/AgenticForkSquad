@@ -53,11 +53,13 @@ func main() {
 	// 4. Initialize Repositories (Infrastructure)
 	// ============================================
 	// migrationRepo := postgres.NewPostgresMigrationRepository(db)
+	userRepo := repo.NewPostgresUserRepository(db)
 
 	// ============================================
 	// 5. Initialize Use Cases (Application Layer)
 	// ============================================
 	// orchestrateMigrationUC := usecases.NewOrchestrateMigrationUseCase(migrationRepo)
+	authService := usecases.NewAuthService(userRepo, cfg.JWTSecret)
 
 	// ============================================
 	// 6. Initialize WebSocket Hub
@@ -108,7 +110,9 @@ func main() {
 	benchRepo := repo.NewPostgresBenchmarkRepository(db)
 	consRepo := repo.NewPostgresConsensusRepository(db)
 	resultsHandler := handlers.NewResultsHandler(agentExecRepo, optRepo, benchRepo, consRepo, hub)
-	routes.SetupRoutes(app, hub, taskHandler, resultsHandler)
+	authHandler := handlers.NewAuthHandler(authService)
+	metricsHandler := handlers.NewMetricsHandler(db)
+	routes.SetupRoutes(app, hub, taskHandler, resultsHandler, authHandler, authService, metricsHandler)
 
 	// ============================================
 	// 10. Graceful Shutdown

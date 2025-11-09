@@ -4,11 +4,12 @@ import (
     "github.com/gofiber/fiber/v2"
     websocket "github.com/gofiber/websocket/v2"
     "github.com/tuusuario/afs-challenge/internal/presentation/http/handlers"
+    "github.com/tuusuario/afs-challenge/internal/presentation/http/middleware"
     "github.com/tuusuario/afs-challenge/internal/usecases"
 )
 
 // SetupRoutes configures all application routes
-func SetupRoutes(app *fiber.App, hub *usecases.Hub, taskH *handlers.TaskHandler, resH *handlers.ResultsHandler) {
+func SetupRoutes(app *fiber.App, hub *usecases.Hub, taskH *handlers.TaskHandler, resH *handlers.ResultsHandler, authH *handlers.AuthHandler, authSvc *usecases.AuthService, metricsH *handlers.MetricsHandler) {
     // ============================================
     // Health Check Endpoints
     // ============================================
@@ -17,9 +18,17 @@ func SetupRoutes(app *fiber.App, hub *usecases.Hub, taskH *handlers.TaskHandler,
     app.Get("/health/ready", handlers.Readiness)
 
     // ============================================
-    // API v1 Routes
+    // Authentication (Public)
     // ============================================
-    api := app.Group("/api/v1")
+    auth := app.Group("/auth")
+    auth.Post("/login", authH.Login)
+    auth.Post("/register", authH.Register)
+    auth.Get("/me", middleware.AuthMiddleware(authSvc), authH.Me)
+
+    // ============================================
+    // API v1 Routes (Protected)
+    // ============================================
+    api := app.Group("/api/v1", middleware.AuthMiddleware(authSvc))
 
     // Root endpoint
     api.Get("/", func(c *fiber.Ctx) error {
@@ -55,6 +64,13 @@ func SetupRoutes(app *fiber.App, hub *usecases.Hub, taskH *handlers.TaskHandler,
     agents.Get("/:type/status", func(c *fiber.Ctx) error {
         return c.JSON(fiber.Map{"message": "Agent status - TODO", "type": c.Params("type")})
     })
+
+    // ============================================
+    // Metrics & Analytics
+    // ============================================
+    api.Get("/metrics/overview", metricsH.GetOverview)
+    api.Get("/metrics/agents", metricsH.GetAgentMetrics)
+    api.Get("/metrics/performance", metricsH.GetPerformance)
 
     // ============================================
     // WebSocket
