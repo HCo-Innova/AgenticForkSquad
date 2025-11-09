@@ -15,6 +15,25 @@ type ConsensusEngine struct{}
 
 func NewConsensusEngine() *ConsensusEngine { return &ConsensusEngine{} }
 
+// RunConsensus ejecuta el proceso de consenso y retorna la decisión
+func (ce *ConsensusEngine) RunConsensus(ctx context.Context, taskID int64, proposals []*entities.OptimizationProposal, benchmarks []*entities.BenchmarkResult) (*entities.ConsensusDecision, error) {
+	// Criterios por defecto según documentación (05-CONSENSUS-BENCHMARKING.md)
+	criteria := entities.ScoringCriteria{
+		PerformanceWeight: 0.5,
+		StorageWeight:     0.2,
+		ComplexityWeight:  0.2,
+		RiskWeight:        0.1,
+	}
+	
+	decision, err := ce.Decide(ctx, proposals, benchmarks, criteria)
+	if err != nil {
+		return nil, err
+	}
+	
+	decision.TaskID = taskID
+	return decision, nil
+}
+
 // Decide scores proposals given their benchmark results and criteria.
 // Assumption: proposals ordering maps to agent roles:
 //   0->cerebro, 1->operativo, 2->bulk (fallback operativo)

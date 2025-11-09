@@ -10,18 +10,13 @@ import (
 	"github.com/tuusuario/afs-challenge/internal/infrastructure/agents"
 )
 
-// AgentFactory abstracts agent creation for routing.
-type AgentFactory interface {
-	New(agentType values.AgentType) (agents.Agent, error)
-}
-
 // Router selects appropriate agents for a given task based on rules.
 type Router struct {
-	Factory   AgentFactory
+	Factory   *AgentFactory
 	Rationale string
 }
 
-func NewRouter(factory AgentFactory) *Router { return &Router{Factory: factory} }
+func NewRouter(factory *AgentFactory) *Router { return &Router{Factory: factory} }
 
 // SelectAgents applies routing rules and returns agent instances.
 func (r *Router) SelectAgents(ctx context.Context, task *entities.Task) ([]agents.Agent, error) {
@@ -82,7 +77,7 @@ func (r *Router) SelectAgents(ctx context.Context, task *entities.Task) ([]agent
 
 	aList := make([]agents.Agent, 0, len(chosen))
 	for t := range chosen {
-		a, err := r.Factory.New(t)
+		a, err := r.Factory.CreateAgent(t)
 		if err != nil { return nil, err }
 		aList = append(aList, a)
 	}

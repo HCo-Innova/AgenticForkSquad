@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"time"
@@ -13,12 +14,17 @@ import (
 
 // TaskHandler encapsula los endpoints REST de tareas.
 type TaskHandler struct {
-	TaskService *usecases.TaskService
-	Hub         *usecases.Hub
+	TaskService    *usecases.TaskService
+	TaskProcessor  *usecases.TaskProcessor
+	Hub            *usecases.Hub
 }
 
-func NewTaskHandler(svc *usecases.TaskService, hub *usecases.Hub) *TaskHandler {
-	return &TaskHandler{TaskService: svc, Hub: hub}
+func NewTaskHandler(svc *usecases.TaskService, processor *usecases.TaskProcessor, hub *usecases.Hub) *TaskHandler {
+	return &TaskHandler{
+		TaskService:   svc,
+		TaskProcessor: processor,
+		Hub:           hub,
+	}
 }
 
 // ======================
@@ -134,6 +140,18 @@ func (h *TaskHandler) CreateTask(c *fiber.Ctx) error {
 				"target_query": created.TargetQuery,
 			},
 		})
+	}
+
+	// Procesar tarea asíncronamente
+	if h.TaskProcessor != nil {
+		go func(taskID int64) {
+			ctx := context.Background()
+			if err := h.TaskProcessor.ProcessTask(ctx, taskID); err != nil {
+				// Log error pero no fallar el request HTTP
+				// El error se reflejará en el estado de la tarea
+				println("Error processing task", taskID, ":", err.Error())
+			}
+		}(int64(created.ID))
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(mapEntityToResponse(created))

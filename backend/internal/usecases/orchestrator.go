@@ -11,6 +11,13 @@ import (
 	"github.com/tuusuario/afs-challenge/internal/infrastructure/mcp"
 )
 
+// Agent is the common interface that all agents must implement
+// Re-exported from agents package for convenience
+type Agent = agents.Agent
+
+// AnalysisResult is the result of an agent's analysis phase
+type AnalysisResult = agents.AnalysisResult
+
 // Orchestrator - Fase 1: ejecución paralela de agentes
 // Dependencias incluidas para futuras fases, aquí sólo se usan Router/Factory opcionalmente.
 type Orchestrator struct {
@@ -22,38 +29,38 @@ type Orchestrator struct {
 
 func NewOrchestrator() *Orchestrator { return &Orchestrator{} }
 
-// ExecuteAgentsInParallel ejecuta N agentes en paralelo y recopila propuestas y benchmarks.
+// ExecuteAgentsInParallel ejecuta N agentes en paralelo con fork IDs reales y recopila propuestas y benchmarks.
 // Errores parciales son tolerados (si al menos uno entrega resultados).
-func (o *Orchestrator) ExecuteAgentsInParallel(ctx context.Context, task *entities.Task, ags []agents.Agent) ([]*entities.OptimizationProposal, []*entities.BenchmarkResult, error) {
+func (o *Orchestrator) ExecuteAgentsInParallel(ctx context.Context, task *entities.Task, ags []Agent, forkIDs []string) ([]*entities.OptimizationProposal, []*entities.BenchmarkResult, error) {
 	if task == nil { return nil, nil, errors.New("task is required") }
 	if len(ags) == 0 { return nil, nil, errors.New("no agents provided") }
+	if len(ags) != len(forkIDs) { return nil, nil, errors.New("agents and forkIDs count mismatch") }
 
 	var wg sync.WaitGroup
 	propCh := make(chan *entities.OptimizationProposal, len(ags))
 	benchCh := make(chan []*entities.BenchmarkResult, len(ags))
 	errCh := make(chan error, len(ags))
 
-	for _, a := range ags {
+	for i, a := range ags {
 		wg.Add(1)
-		go func(a agents.Agent) {
+		go func(idx int, ag Agent, forkID string) {
 			defer wg.Done()
 			// Timeout por agente: 10 minutos
 			aCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 			defer cancel()
 
-			// CreateFork y demás pasos se simulan a nivel de Agent (BaseAgent lo maneja),
-			// en esta fase sólo llamamos a Analyze/Propose/RunBenchmark secuencialmente dentro de la goroutine.
-			analysis, err := a.AnalyzeTask(aCtx, task, "fork-mock")
+			// Usar fork ID real en todas las operaciones del agente
+			analysis, err := ag.AnalyzeTask(aCtx, task, forkID)
 			if err != nil { errCh <- err; return }
-			prop, err := a.ProposeOptimization(aCtx, analysis, "fork-mock")
+			prop, err := ag.ProposeOptimization(aCtx, analysis, forkID)
 			if err != nil { errCh <- err; return }
 			// asignar ID simulado si no viene
 			if prop.ID == 0 { prop.ID = time.Now().UnixNano() }
-			res, err := a.RunBenchmark(aCtx, prop, "fork-mock")
+			res, err := ag.RunBenchmark(aCtx, prop, forkID)
 			if err != nil { errCh <- err; return }
 			propCh <- prop
 			benchCh <- res
-		}(a)
+		}(i, a, forkIDs[i])
 	}
 
 	wg.Wait()
@@ -75,8 +82,9 @@ func (o *Orchestrator) ExecuteAgentsInParallel(ctx context.Context, task *entiti
 	return proposals, benchmarks, nil
 }
 
-// mcpFullPort abstracts MCP operations needed for apply/cleanup.
+// mcpFullPort abstracts MCP operations needed for fork management, query execution and cleanup.
 type mcpFullPort interface {
+	CreateFork(ctx context.Context, parentServiceID, forkName string) (string, error)
 	ExecuteQuery(ctx context.Context, serviceID, sql string, timeoutMs int) (mcp.QueryResult, error)
 	DeleteFork(ctx context.Context, serviceID string) error
 }
@@ -109,9 +117,9 @@ func (o *Orchestrator) CleanupForks(ctx context.Context, forkIDs []string) error
 
 // ExecuteTask ejecuta el flujo completo con dependencias provistas (simplificado para tests):
 // agents ya seleccionados, consensus engine provisto, mainService y forkIDs a limpiar.
-func (o *Orchestrator) ExecuteTask(ctx context.Context, task *entities.Task, ags []agents.Agent, ce *ConsensusEngine, mainService string, forkIDs []string) (*entities.ConsensusDecision, error) {
+func (o *Orchestrator) ExecuteTask(ctx context.Context, task *entities.Task, ags []Agent, ce *ConsensusEngine, mainService string, forkIDs []string) (*entities.ConsensusDecision, error) {
 	if task == nil || ce == nil { return nil, errors.New("invalid inputs") }
-	props, benches, err := o.ExecuteAgentsInParallel(ctx, task, ags)
+	props, benches, err := o.ExecuteAgentsInParallel(ctx, task, ags, forkIDs)
 	if err != nil { return nil, err }
 	// Scoring criteria por defecto
 	criteria := entities.ScoringCriteria{PerformanceWeight: 0.5, StorageWeight: 0.2, ComplexityWeight: 0.2, RiskWeight: 0.1}

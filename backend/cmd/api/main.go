@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -15,7 +16,9 @@ import (
 	_ "github.com/lib/pq"
 
 	"github.com/tuusuario/afs-challenge/config"
+	internalcfg "github.com/tuusuario/afs-challenge/internal/config"
 	repo "github.com/tuusuario/afs-challenge/internal/infrastructure/database/repositories"
+	"github.com/tuusuario/afs-challenge/internal/infrastructure/mcp"
 	handlers "github.com/tuusuario/afs-challenge/internal/presentation/http/handlers"
 	"github.com/tuusuario/afs-challenge/internal/presentation/http/routes"
 	applogger "github.com/tuusuario/afs-challenge/pkg/logger"
@@ -103,12 +106,77 @@ func main() {
 	// ============================================
 	// DI: repos + services + handlers
 	taskRepo := repo.NewPostgresTaskRepository(db)
-	taskSvc := usecases.NewTaskService(taskRepo)
-	taskHandler := handlers.NewTaskHandler(taskSvc, hub)
 	agentExecRepo := repo.NewPostgresAgentExecutionRepository(db)
 	optRepo := repo.NewPostgresOptimizationRepository(db)
 	benchRepo := repo.NewPostgresBenchmarkRepository(db)
 	consRepo := repo.NewPostgresConsensusRepository(db)
+	
+	// Inicializar servicios y processors
+	taskSvc := usecases.NewTaskService(taskRepo)
+	orchestrator := usecases.NewOrchestrator()
+	consensus := usecases.NewConsensusEngine()
+	
+	// Convertir config simple a internal/config
+	internalConfig := &internalcfg.Config{}
+	internalConfig.Database.URL = cfg.DatabaseURL
+	internalConfig.TigerCloud.UseTigerCloud = cfg.UseTigerCloud
+	internalConfig.TigerCloud.MainService = cfg.TigerMainService
+	internalConfig.TigerCloud.MCPURL = cfg.TigerMCPURL
+	internalConfig.VertexAI.ProjectID = os.Getenv("GCP_PROJECT_ID")
+	internalConfig.VertexAI.Location = os.Getenv("GCP_REGION")
+	internalConfig.VertexAI.Credentials = os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	internalConfig.VertexAI.ModelCerebro = "gemini-2.5-pro"
+	internalConfig.VertexAI.ModelOperativo = "gemini-2.5-flash"
+	internalConfig.VertexAI.ModelBulk = "gemini-2.0-flash"
+	
+	// Inicializar MCP Client para Tiger Cloud
+	mcpClient, err := mcp.New(internalConfig, nil)
+	if err != nil {
+		applogger.Info("⚠️ MCP Client initialization failed: " + err.Error())
+		applogger.Info("Continuing without Tiger Cloud integration...")
+		mcpClient = nil
+	} else {
+		applogger.Info("✅ MCP Client initialized successfully")
+		// Conectar MCP (esto puede fallar si tiger CLI no está disponible)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := mcpClient.Connect(ctx); err != nil {
+			applogger.Info("⚠️ MCP Client connection failed: " + err.Error())
+			applogger.Info("Continuing with limited MCP functionality...")
+		} else {
+			applogger.Info("✅ MCP Client connected successfully")
+		}
+	}
+	
+	// Inicializar Orchestrator con MCP Client
+	orchestrator.MCPClient = mcpClient
+	
+	// Crear AgentFactory con MCP Client
+	agentFactory := usecases.NewAgentFactory(mcpClient, agentExecRepo, internalConfig)
+	
+	// Crear TaskProcessor con todas las dependencias
+	var taskProcessor *usecases.TaskProcessor
+	if mcpClient != nil {
+		taskProcessor = usecases.NewTaskProcessor(
+			taskRepo,
+			agentExecRepo,
+			optRepo,
+			benchRepo,
+			consRepo,
+			orchestrator,
+			consensus,
+			hub,
+			agentFactory,
+			internalConfig.TigerCloud.MainService,
+		)
+		applogger.Info("✅ TaskProcessor initialized with full agent processing")
+	} else {
+		applogger.Info("⚠️ TaskProcessor disabled (MCP not available)")
+		taskProcessor = nil
+	}
+	
+	// Handlers
+	taskHandler := handlers.NewTaskHandler(taskSvc, taskProcessor, hub)
 	resultsHandler := handlers.NewResultsHandler(agentExecRepo, optRepo, benchRepo, consRepo, hub)
 	authHandler := handlers.NewAuthHandler(authService)
 	metricsHandler := handlers.NewMetricsHandler(db)
