@@ -105,11 +105,20 @@ func main() {
 	authHandler := httphandlers.NewAuthHandler(nil)
 	metricsHandler := httphandlers.NewMetricsHandler(db)
 	authSvc := usecases.NewAuthService(nil, "dummy-jwt-secret")
+	
+	// CORS middleware - allow Vercel frontend
+	app.Use(func(c *fiber.Ctx) error {
+		c.Set("Access-Control-Allow-Origin", "*")
+		c.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Set("Access-Control-Allow-Credentials", "true")
+		if c.Method() == "OPTIONS" {
+			return c.SendStatus(204)
+		}
+		return c.Next()
+	})
+	
 	routes.SetupRoutes(app, hub, taskHandler, resultsHandler, authHandler, authSvc, metricsHandler)
-
-	// Middleware básicos (CORS/logging) pueden agregarse aquí si están implementados
-	// app.Use(middleware.CORS())
-	// app.Use(middleware.Logging())
 
 	// 11) Start HTTP/WebSocket server
 	addr := net.JoinHostPort(cfg.Server.Host, cfg.Server.Port)
