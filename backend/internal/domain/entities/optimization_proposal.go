@@ -11,11 +11,12 @@ import (
 // EstimatedImpact represents expected performance and storage effects
 // from applying an optimization. This mirrors the JSONB structure stored in DB.
 type EstimatedImpact struct {
-	QueryTimeImprovement float64 // Expected query time improvement in percentage
-	StorageOverheadMB    float64 // Additional or reduced storage impact
-	Complexity           string  // qualitative value: low, medium, high
-	Risk                 string  // qualitative value: low, medium, high
-	AdditionalNotes      string  // optional descriptive text
+	QueryTimeImprovement float64            // Expected query time improvement in percentage
+	StorageOverheadMB    float64            // Additional or reduced storage impact
+	Complexity           string             // qualitative value: low, medium, high
+	Risk                 string             // qualitative value: low, medium, high
+	AdditionalNotes      string             // optional descriptive text
+	ScoreBreakdown       map[string]float64 `json:"score_breakdown,omitempty"` // Scores calculados por consenso
 }
 
 // OptimizationProposal represents a single optimization suggestion made by an agent.

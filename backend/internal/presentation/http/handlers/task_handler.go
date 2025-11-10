@@ -261,3 +261,51 @@ func (h *TaskHandler) ListTasks(c *fiber.Ctx) error {
 		},
 	})
 }
+
+// DELETE /api/v1/tasks/:id
+func (h *TaskHandler) DeleteTask(c *fiber.Ctx) error {
+	if h == nil || h.TaskService == nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fiber.Map{
+				"code":      "INTERNAL_ERROR",
+				"message":   "Task service not available",
+				"timestamp": time.Now().UTC().Format(time.RFC3339),
+			},
+		})
+	}
+
+	id, err := strconv.Atoi(c.Params("id"))
+	if err != nil || id <= 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fiber.Map{
+				"code":      "VALIDATION_ERROR",
+				"message":   "Invalid task ID",
+				"timestamp": time.Now().UTC().Format(time.RFC3339),
+			},
+		})
+	}
+
+	// Verificar que existe
+	task, err := h.TaskService.GetTask(c.Context(), id)
+	if err != nil || task == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": fiber.Map{
+				"code":      "NOT_FOUND",
+				"message":   "Task not found",
+				"timestamp": time.Now().UTC().Format(time.RFC3339),
+			},
+		})
+	}
+
+	if err := h.TaskService.DeleteTask(c.Context(), int64(id)); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fiber.Map{
+				"code":      "INTERNAL_ERROR",
+				"message":   err.Error(),
+				"timestamp": time.Now().UTC().Format(time.RFC3339),
+			},
+		})
+	}
+
+	return c.Status(fiber.StatusNoContent).Send(nil)
+}

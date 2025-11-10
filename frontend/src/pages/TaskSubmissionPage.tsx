@@ -10,21 +10,31 @@ export default function TaskSubmissionPage() {
 
   function onChange<K extends keyof CreateTaskInput>(key: K, val: CreateTaskInput[K]) {
     setForm((f) => ({ ...f, [key]: val }))
+    // Clear error when user types
+    if (error) setError(null)
   }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    
+    // Validation
     if (!form.type || !form.target_query.trim()) {
-      setError('Tipo y Target Query son obligatorios')
+      setError('Task type and SQL query are required')
       return
     }
+    
+    if (form.target_query.trim().length < 10) {
+      setError('SQL query is too short (minimum 10 characters)')
+      return
+    }
+    
     try {
       setLoading(true)
       const task = await createTask(form)
       navigate(`/tasks/${task.id}`)
     } catch (err: any) {
-      setError(err?.message ?? 'Error creando tarea')
+      setError(err?.message ?? 'Failed to create task')
     } finally {
       setLoading(false)
     }
@@ -33,58 +43,71 @@ export default function TaskSubmissionPage() {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="mb-6">
-        <h2 className="text-3xl font-bold text-gray-900">Crear Nueva Tarea de Optimización</h2>
+        <h2 className="text-3xl font-bold text-gray-900">Create New Optimization Task</h2>
         <p className="mt-2 text-sm text-gray-600">
-          El sistema asignará 3 agentes especializados que trabajarán en paralelo para optimizar tu query.
+          The system will assign 3 specialized agents that will work in parallel to optimize your query.
         </p>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-6 bg-white shadow-md rounded-lg p-6">
-        {/* Tipo */}
+        {/* Task Type */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Tipo de Tarea
+            Task Type
           </label>
           <select 
             value={form.type} 
             onChange={(e) => onChange('type', e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
           >
             <option value="query_optimization">Query Optimization</option>
-            <option value="index_suggestion">Index Suggestion</option>
-            <option value="performance_analysis">Performance Analysis</option>
+            <option value="index_tuning">Index Tuning</option>
+            <option value="schema_improvement">Schema Improvement</option>
+            <option value="partitioning">Partitioning</option>
           </select>
         </div>
 
-        {/* Descripción */}
+        {/* Description */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Descripción (opcional)
+            Description (optional)
           </label>
           <input 
             type="text"
             value={form.description ?? ''} 
             onChange={(e) => onChange('description', e.target.value)} 
-            placeholder="Ej: Query toma 5+ segundos con 100K órdenes"
-            className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="E.g., Query takes 5+ seconds with 100K orders"
+            maxLength={200}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
           />
+          {form.description && (
+            <p className="mt-1 text-xs text-gray-500">
+              {form.description.length}/200 characters
+            </p>
+          )}
         </div>
 
-        {/* Target Query */}
+        {/* SQL Query */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Query SQL a Optimizar <span className="text-red-500">*</span>
+            SQL Query to Optimize <span className="text-red-500">*</span>
           </label>
           <textarea 
             value={form.target_query} 
             onChange={(e) => onChange('target_query', e.target.value)} 
             placeholder="SELECT o.*, p.amount FROM orders o JOIN payments p ON o.id = p.order_id WHERE o.user_id = 12345 AND o.created_at > '2024-01-01' ORDER BY o.created_at DESC"
             rows={8}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+            required
+            className="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm transition-all"
           />
-          <p className="mt-1 text-xs text-gray-500">
-            Pega aquí el query SQL que necesita optimización. Los 3 agentes lo analizarán en paralelo.
-          </p>
+          <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
+            <span>Paste the SQL query that needs optimization. The 3 agents will analyze it in parallel.</span>
+            {form.target_query && (
+              <span className="font-medium">
+                {form.target_query.length} chars
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Error */}
@@ -97,11 +120,11 @@ export default function TaskSubmissionPage() {
           </div>
         )}
 
-        {/* Botón Submit */}
-        <div className="flex gap-3">
+        {/* Submit Button */}
+        <div className="flex gap-3 pt-2">
           <button 
             type="submit" 
-            disabled={loading}
+            disabled={loading || !form.target_query.trim()}
             className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-md font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? (
@@ -110,18 +133,19 @@ export default function TaskSubmissionPage() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Creando tarea...
+                Creating task...
               </span>
             ) : (
-              '🚀 Crear Tarea y Ejecutar Agentes'
+              '🚀 Create Task and Execute Agents'
             )}
           </button>
           <button 
             type="button"
             onClick={() => navigate('/tasks')}
-            className="px-6 py-3 border border-gray-300 rounded-md font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+            disabled={loading}
+            className="px-6 py-3 border border-gray-300 rounded-md font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            Cancelar
+            Cancel
           </button>
         </div>
       </form>

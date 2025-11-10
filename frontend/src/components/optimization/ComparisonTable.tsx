@@ -7,6 +7,15 @@ function pct(val?: number) {
 }
 
 export default function ComparisonTable({ proposals, onSelect, selectedId }: { proposals: Proposal[]; onSelect?: (id: number) => void; selectedId?: number }) {
+  if (!proposals.length) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        <p>Sin desglose de puntaje</p>
+        <p className="text-sm mt-2">Los puntajes aparecerán cuando el consenso se complete.</p>
+      </div>
+    )
+  }
+
   return (
     <div>
       <h3>Comparison</h3>
@@ -24,21 +33,52 @@ export default function ComparisonTable({ proposals, onSelect, selectedId }: { p
           <tbody>
             {proposals.map((p) => {
               const impact = (p.estimated_impact || {}) as any
-              const speed = Number(impact.speedup_pct)
-              const storage = Number(impact.storage_overhead_pct)
-              const score = Number(impact.score)
+              const breakdown = (impact.score_breakdown || {}) as Record<string, number>
+              
+              // Usar performance score del consenso si existe, sino intentar estimated
+              const speed = breakdown.performance ?? Number(impact.query_time_improvement || impact.speedup_pct || 0)
+              
+              // Usar storage score (invertido: 100=bajo overhead) o MB directo
+              const storageMB = Number(impact.storage_overhead_mb || 0)
+              const storageScore = breakdown.storage ?? 0
+              
+              // Score total del consenso
+              const score = breakdown.weighted_total ?? Number(impact.score || 0)
+              
               return (
                 <tr key={p.id} onClick={onSelect ? () => onSelect(p.id) : undefined} style={{ borderTop: '1px solid #eee', cursor: onSelect ? 'pointer' : 'default', background: selectedId === p.id ? '#f0f9ff' : undefined }}>
                   <td style={{ padding: 8 }}>#{p.id}</td>
                   <td style={{ padding: 8 }}>{p.proposal_type}</td>
                   <td style={{ padding: 8 }}>
-                    <Bar value={speed} color="#16a34a" /> {pct(speed)}
+                    {speed > 0 ? (
+                      <>
+                        <Bar value={speed} color="#16a34a" /> {pct(speed)}
+                      </>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
                   </td>
                   <td style={{ padding: 8 }}>
-                    <Bar value={storage} color="#d97706" /> {pct(storage)}
+                    {storageMB > 0 ? (
+                      <>
+                        <Bar value={storageMB} color="#d97706" max={50} /> {storageMB.toFixed(1)} MB
+                      </>
+                    ) : storageScore > 0 ? (
+                      <>
+                        <Bar value={100 - storageScore} color="#d97706" /> {(100 - storageScore).toFixed(1)}%
+                      </>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
                   </td>
                   <td style={{ padding: 8 }}>
-                    <Bar value={score} color="#2563eb" max={100} /> {Number.isFinite(score) ? score.toFixed(1) : '—'}
+                    {score > 0 ? (
+                      <>
+                        <Bar value={score} color="#2563eb" max={100} /> {score.toFixed(1)}
+                      </>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
                   </td>
                 </tr>
               )

@@ -190,6 +190,18 @@ func (r *PostgresTaskRepository) Update(ctx context.Context, task *entities.Task
 	return nil
 }
 
+// Delete removes a task by ID.
+func (r *PostgresTaskRepository) Delete(ctx context.Context, id int) error {
+	if r == nil || r.db == nil { return errors.New("nil repository or db") }
+	if id <= 0 { return errors.New("invalid id") }
+	query := `DELETE FROM tasks WHERE id=$1`
+	res, err := r.db.ExecContext(ctx, query, id)
+	if err != nil { return err }
+	affected, _ := res.RowsAffected()
+	if affected == 0 { return sql.ErrNoRows }
+	return nil
+}
+
 // Helpers
 func nullTimeFrom(t time.Time) sql.NullTime {
 	if t.IsZero() { return sql.NullTime{} }

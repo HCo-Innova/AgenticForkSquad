@@ -141,7 +141,7 @@ func TestOrchestratorComplete(t *testing.T) {
 	// Phase 1: Parallel agent execution
 	parallelStart := time.Now()
 	// Execute agents in parallel
-	props, benches, err := orch.ExecuteAgentsInParallel(context.Background(), task, []agents.Agent{ag1, ag2, ag3})
+	props, benches, err := orch.ExecuteAgentsInParallel(context.Background(), task, []agents.Agent{ag1, ag2, ag3}, []string{"fork1", "fork2", "fork3"}, []int64{1, 2, 3})
 	parallelDuration := time.Since(parallelStart)
 	report.ParallelExecDuration = parallelDuration
 	

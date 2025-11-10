@@ -169,7 +169,8 @@ func (c *MCPClient) executeQueryPostgres(ctx context.Context, serviceID, sqlQuer
 		return QueryResult{}, fmt.Errorf("mcp: failed to connect to database: %w", err)
 	}
 	
-	// Execute query
+	// Execute query and measure time
+	startTime := time.Now()
 	rows, err := db.QueryContext(queryCtx, sqlQuery)
 	if err != nil {
 		return QueryResult{}, fmt.Errorf("mcp: query execution failed: %w", err)
@@ -206,7 +207,11 @@ func (c *MCPClient) executeQueryPostgres(ctx context.Context, serviceID, sqlQuer
 		return QueryResult{}, fmt.Errorf("mcp: error reading rows: %w", err)
 	}
 	
+	// Calculate execution time
+	executionTime := time.Since(startTime).Seconds() * 1000 // convert to milliseconds
+	
 	result.RowCount = len(result.Rows)
+	result.ExecutionTimeMs = executionTime
 	return result, nil
 }
 

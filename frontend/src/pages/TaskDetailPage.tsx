@@ -18,6 +18,60 @@ export default function TaskDetailPage() {
 
   const [timeline, setTimeline] = useState<TimelineItem[]>([])
 
+  // Define agents early to avoid TDZ
+  const agents = useMemo(() => agentsQ.data?.data ?? [], [agentsQ.data])
+
+  // Reconstruir timeline desde datos históricos para tareas completadas
+  useEffect(() => {
+    if (!data || !agents.length) return
+    if (data.status === 'pending' || data.status === 'routing') return
+
+    const historicalEvents: TimelineItem[] = []
+    
+    // Task created
+    historicalEvents.push({
+      ts: data.created_at,
+      type: 'task_created',
+      payload: { task_id: taskId, type: data.type }
+    })
+
+    // Agents assigned (si hay agentes)
+    if (agents.length > 0) {
+      const firstAgentTime = agents[0]?.created_at || data.created_at
+      historicalEvents.push({
+        ts: firstAgentTime,
+        type: 'agents_assigned',
+        payload: { task_id: taskId, count: agents.length }
+      })
+
+      // Fork created por cada agente
+      agents.forEach((agent, idx) => {
+        historicalEvents.push({
+          ts: agent.created_at || firstAgentTime,
+          type: 'fork_created',
+          payload: { 
+            task_id: taskId, 
+            agent_type: agent.agent_type,
+            fork_id: agent.fork_id 
+          }
+        })
+      })
+    }
+
+    // Task completed/failed
+    if (data.completed_at) {
+      historicalEvents.push({
+        ts: data.completed_at,
+        type: data.status === 'failed' ? 'task_failed' : 'task_completed',
+        payload: { task_id: taskId }
+      })
+    }
+
+    // Ordenar por timestamp
+    historicalEvents.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
+    setTimeline(historicalEvents)
+  }, [data, agents, taskId])
+
   const ws = useWebSocket(undefined, [
     'task_created',
     'agents_assigned',
@@ -56,8 +110,6 @@ export default function TaskDetailPage() {
     return () => ws.close()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId])
-
-  const agents = useMemo(() => agentsQ.data?.data ?? [], [agentsQ.data])
 
   // Helper para mapear status a colores
   const getStatusColor = (status: string) => {
@@ -216,13 +268,13 @@ export default function TaskDetailPage() {
 
       {/* Timeline Section */}
       <div className="bg-white shadow-md rounded-lg p-6">
-        <h3 className="text-2xl font-bold text-gray-900 mb-4">📊 Timeline de Eventos en Tiempo Real</h3>
+        <h3 className="text-2xl font-bold text-gray-900 mb-4">📊 Real-Time Event Timeline</h3>
         {timeline.length === 0 ? (
           <div className="bg-gray-50 border border-gray-200 text-gray-600 px-4 py-8 rounded-md text-center">
             <svg className="w-12 h-12 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p>Sin eventos aún. Los eventos aparecerán aquí en tiempo real vía WebSocket.</p>
+            <p>No events yet. Events will appear here in real-time via WebSocket.</p>
           </div>
         ) : (
           <div className="space-y-3 max-h-96 overflow-y-auto">

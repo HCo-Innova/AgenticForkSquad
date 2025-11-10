@@ -5,11 +5,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"time"
 
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 	cfgpkg "github.com/tuusuario/afs-challenge/internal/config"
 )
 
@@ -39,7 +44,22 @@ func NewVertexClient(cfg *cfgpkg.Config, model string, httpClient Doer) (*Vertex
 		return nil, errors.New("missing Vertex project/location")
 	}
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 30 * time.Second}
+		// Use Application Default Credentials
+		ctx := context.Background()
+		credsFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+		if credsFile != "" {
+			credsJSON, err := os.ReadFile(credsFile)
+			if err == nil {
+				creds, err := google.CredentialsFromJSON(ctx, credsJSON, "https://www.googleapis.com/auth/cloud-platform")
+				if err == nil {
+					httpClient = oauth2.NewClient(ctx, creds.TokenSource)
+				}
+			}
+		}
+		// Fallback if ADC fails
+		if httpClient == nil {
+			httpClient = &http.Client{Timeout: 30 * time.Second}
+		}
 	}
 	vc := &VertexClient{
 		httpClient:  httpClient,
@@ -116,7 +136,8 @@ func (c *VertexClient) invoke(ctx context.Context, prompt, system string, jsonMo
 	if err != nil { return "", err }
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", errors.New("vertex: http error")
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("vertex: http error %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 	// Parse per-model response (Gemini family)
 	switch c.model {
@@ -145,8 +166,9 @@ func (c *VertexClient) invoke(ctx context.Context, prompt, system string, jsonMo
 }
 
 func (c *VertexClient) endpoint() string {
-	// We don't hit real endpoints in tests; return a stable placeholder.
-	return c.baseURL + "/vertex/mock"
+	// Real Vertex AI endpoint
+	return fmt.Sprintf("https://%s-aiplatform.googleapis.com/v1/projects/%s/locations/%s/publishers/google/models/%s:generateContent",
+		c.location, c.projectID, c.location, c.model)
 }
 
 func (c *VertexClient) requestBody(prompt, system string, jsonMode bool) ([]byte, error) {
@@ -159,6 +181,7 @@ func (c *VertexClient) requestBody(prompt, system string, jsonMode bool) ([]byte
 		if jsonMode { gen["response_mime_type"] = "application/json" }
 		payload := map[string]interface{}{
 			"contents": []map[string]interface{}{{
+				"role": "user",
 				"parts": []map[string]string{{"text": prompt}},
 			}},
 			"generation_config": gen,

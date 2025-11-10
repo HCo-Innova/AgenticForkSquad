@@ -26,9 +26,9 @@ func SetupRoutes(app *fiber.App, hub *usecases.Hub, taskH *handlers.TaskHandler,
     auth.Get("/me", middleware.AuthMiddleware(authSvc), authH.Me)
 
     // ============================================
-    // API v1 Routes (Protected)
+    // API v1 Routes
     // ============================================
-    api := app.Group("/api/v1", middleware.AuthMiddleware(authSvc))
+    api := app.Group("/api/v1")
 
     // Root endpoint
     api.Get("/", func(c *fiber.Ctx) error {
@@ -40,11 +40,19 @@ func SetupRoutes(app *fiber.App, hub *usecases.Hub, taskH *handlers.TaskHandler,
     })
 
     // ============================================
+    // Metrics (Public)
+    // ============================================
+    api.Get("/metrics/overview", metricsH.GetOverview)
+    api.Get("/metrics/agents", metricsH.GetAgentMetrics)
+    api.Get("/metrics/performance", metricsH.GetPerformance)
+
+    // ============================================
     // Tasks
     // ============================================
     api.Post("/tasks", taskH.CreateTask)
     api.Get("/tasks", taskH.ListTasks)
     api.Get("/tasks/:id", taskH.GetTask)
+    api.Delete("/tasks/:id", taskH.DeleteTask)
     api.Get("/tasks/:id/agents", resH.GetTaskAgents)
     api.Get("/tasks/:id/proposals", resH.GetTaskProposals)
     api.Get("/tasks/:id/consensus", resH.GetTaskConsensus)
@@ -58,19 +66,10 @@ func SetupRoutes(app *fiber.App, hub *usecases.Hub, taskH *handlers.TaskHandler,
     // Agents
     // ============================================
     agents := api.Group("/agents")
-    agents.Get("/", func(c *fiber.Ctx) error {
-        return c.JSON(fiber.Map{"message": "List agents - TODO"})
-    })
+    agents.Get("/", resH.ListAllAgents)
     agents.Get("/:type/status", func(c *fiber.Ctx) error {
         return c.JSON(fiber.Map{"message": "Agent status - TODO", "type": c.Params("type")})
     })
-
-    // ============================================
-    // Metrics & Analytics
-    // ============================================
-    api.Get("/metrics/overview", metricsH.GetOverview)
-    api.Get("/metrics/agents", metricsH.GetAgentMetrics)
-    api.Get("/metrics/performance", metricsH.GetPerformance)
 
     // ============================================
     // WebSocket

@@ -25,11 +25,13 @@ type DashboardMetrics struct {
 }
 
 type AgentMetrics struct {
-	AgentType   string  `json:"agent_type"`
-	TotalTasks  int     `json:"total_tasks"`
-	SuccessRate float64 `json:"success_rate"`
+	AgentType   string  `json:"agent_type" db:"agent_type"`
+	Name        string  `json:"name"`
+	TotalTasks  int     `json:"total_tasks" db:"total_tasks"`
+	Wins        int     `json:"wins"`
+	SuccessRate float64 `json:"success_rate" db:"success_rate"`
 	WinRate     float64 `json:"win_rate"`
-	AvgDuration float64 `json:"avg_duration_seconds"`
+	AvgDuration float64 `json:"avg_duration" db:"avg_duration"`
 }
 
 type PerformanceData struct {
@@ -104,20 +106,36 @@ func (h *MetricsHandler) GetOverview(c *fiber.Ctx) error {
 }
 
 func (h *MetricsHandler) GetAgentMetrics(c *fiber.Ctx) error {
-	query := "SELECT ae.agent_type, COUNT(*) as total_tasks, AVG(CASE WHEN ae.status = 'completed' THEN 1.0 ELSE 0.0 END) * 100 as success_rate, AVG(EXTRACT(EPOCH FROM (ae.completed_at - ae.started_at))) as avg_duration FROM agent_executions ae WHERE ae.started_at IS NOT NULL GROUP BY ae.agent_type ORDER BY total_tasks DESC"
+	query := `
+		SELECT 
+			ae.agent_type,
+			COUNT(*) as total_tasks,
+			COALESCE(AVG(CASE WHEN ae.status = 'completed' THEN 1.0 ELSE 0.0 END) * 100, 0) as success_rate,
+			COALESCE(AVG(EXTRACT(EPOCH FROM (ae.completed_at - ae.started_at))), 0) as avg_duration
+		FROM agent_executions ae
+		WHERE ae.started_at IS NOT NULL
+		GROUP BY ae.agent_type
+		ORDER BY total_tasks DESC
+	`
 
 	var metrics []AgentMetrics
 	err := h.db.Select(&metrics, query)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to fetch agent metrics",
-		})
+		return c.JSON([]AgentMetrics{})
 	}
 
 	for i := range metrics {
-		winQuery := "SELECT COUNT(*) FROM consensus_decisions cd INNER JOIN optimization_proposals o ON cd.winning_proposal_id = o.id INNER JOIN agent_executions ae ON ae.id = o.agent_execution_id WHERE ae.agent_type = $1"
+		metrics[i].Name = metrics[i].AgentType
+		winQuery := `
+			SELECT COUNT(*)
+			FROM consensus_decisions cd
+			INNER JOIN optimization_proposals o ON cd.winning_proposal_id = o.id
+			INNER JOIN agent_executions ae ON ae.id = o.agent_execution_id
+			WHERE ae.agent_type = $1
+		`
 		var wins int
 		if err := h.db.Get(&wins, winQuery, metrics[i].AgentType); err == nil {
+			metrics[i].Wins = wins
 			if metrics[i].TotalTasks > 0 {
 				metrics[i].WinRate = float64(wins) / float64(metrics[i].TotalTasks) * 100
 			}
@@ -137,19 +155,42 @@ func (h *MetricsHandler) GetPerformance(c *fiber.Ctx) error {
 	type perfRow struct {
 		Date           string  `db:"date"`
 		TasksCompleted int     `db:"tasks_completed"`
-		AvgImprovement float64 `db:"avg_improvement"`
+		SuccessRate    float64 `db:"success_rate"`
+		AvgDuration    float64 `db:"avg_duration"`
 	}
+
+	query := `
+		SELECT 
+			DATE(t.created_at)::TEXT as date,
+			COUNT(*)::INT as tasks_completed,
+			COALESCE(AVG(CASE WHEN t.status = 'completed' THEN 100.0 ELSE 0 END), 0) as success_rate,
+			COALESCE(AVG(EXTRACT(EPOCH FROM (t.completed_at - t.created_at))), 0) as avg_duration
+		FROM tasks t
+		WHERE t.created_at >= CURRENT_DATE - INTERVAL '1 day' * $1
+		GROUP BY DATE(t.created_at)
+		ORDER BY date ASC
+	`
 
 	var data []perfRow
-	err := h.db.Select(&data, "SELECT DATE(t.created_at)::TEXT as date, COUNT(*)::INT as tasks_completed, 0::FLOAT as avg_improvement FROM tasks t WHERE t.status = 'completed' AND t.created_at >= CURRENT_DATE - INTERVAL '1 day' * $1 GROUP BY DATE(t.created_at) ORDER BY date ASC", days)
+	err := h.db.Select(&data, query, days)
 	
 	if err != nil {
-		return c.JSON([]perfRow{})
+		return c.JSON([]fiber.Map{})
 	}
 
-	if data == nil {
-		data = []perfRow{}
+	response := make([]fiber.Map, 0, len(data))
+	for _, row := range data {
+		response = append(response, fiber.Map{
+			"date":         row.Date,
+			"tasks":        row.TasksCompleted,
+			"success_rate": row.SuccessRate,
+			"avg_duration": row.AvgDuration,
+		})
 	}
 
-	return c.JSON(data)
+	if response == nil {
+		response = []fiber.Map{}
+	}
+
+	return c.JSON(response)
 }

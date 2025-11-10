@@ -66,8 +66,8 @@ export default function HomePage() {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey="tasks_completed" stroke="#3B82F6" name="Tasks" />
-                <Line type="monotone" dataKey="avg_improvement" stroke="#10B981" name="Improvement %" />
+                <Line type="monotone" dataKey="tasks" stroke="#3B82F6" name="Tasks" />
+                <Line type="monotone" dataKey="success_rate" stroke="#10B981" name="Improvement %" />
               </LineChart>
             </ResponsiveContainer>
           )}
@@ -141,7 +141,7 @@ export default function HomePage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-gray-600">
-                      {formatDuration(agent.avg_duration_seconds)}
+                      {formatDuration(agent.avg_duration || 0)}
                     </td>
                   </tr>
                 ))}

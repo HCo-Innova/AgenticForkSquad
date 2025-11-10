@@ -10,12 +10,14 @@ type TaskRepository interface {
 	GetByID(ctx context.Context, id int) (*entities.Task, error)
 	List(ctx context.Context, filters entities.TaskFilters) ([]*entities.Task, error)
 	Update(ctx context.Context, task *entities.Task) error
+	Delete(ctx context.Context, id int) error
 }
 
 type AgentExecutionRepository interface {
 	Create(ctx context.Context, exec *entities.AgentExecution) error
 	GetByID(ctx context.Context, id int) (*entities.AgentExecution, error)
 	GetByTaskID(ctx context.Context, taskID int) ([]*entities.AgentExecution, error)
+	List(ctx context.Context) ([]*entities.AgentExecution, error)
 	Update(ctx context.Context, exec *entities.AgentExecution) error
 }
 

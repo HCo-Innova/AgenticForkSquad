@@ -790,7 +790,7 @@ git push origin feature/amazing-feature
 
 ## 📝 License
 
-MIT License - Ver [LICENSE](LICENSE)
+AGPL-3.0 License - See [LICENSE](LICENSE)
 
 ---
 
@@ -885,7 +885,7 @@ Para propuestas de mejora o issues: Ver [CONTRIBUTING.md](#) (próximo)
 
 ## 📝 License
 
-MIT License - Ver [LICENSE](LICENSE)
+AGPL-3.0 License - See [LICENSE](LICENSE)
 
 ---
 

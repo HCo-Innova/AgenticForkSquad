@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Nav from './components/Nav'
+import Footer from './components/Footer'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
@@ -26,9 +27,9 @@ export default function App() {
           
           <Route path="/*" element={
             <ProtectedRoute>
-              <div>
+              <div className="min-h-screen flex flex-col">
                 <Nav />
-                <div style={{ padding: '1rem' }}>
+                <main className="flex-1" style={{ padding: '1rem' }}>
                   <Routes>
                     <Route path="/" element={<HomePage />} />
                     <Route path="/tasks" element={<TaskListPage />} />
@@ -39,7 +40,8 @@ export default function App() {
                     <Route path="/analytics" element={<AnalyticsPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                   </Routes>
-                </div>
+                </main>
+                <Footer />
               </div>
             </ProtectedRoute>
           } />

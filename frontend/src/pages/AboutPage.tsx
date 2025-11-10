@@ -103,7 +103,7 @@ export default function AboutPage() {
             <div className="space-y-2 text-gray-700">
               <p><strong>Challenge:</strong> Tiger Cloud Challenge 2024</p>
               <p><strong>Repository:</strong> <a href="https://github.com/HCo-Innova/AgenticForkSquad" className="text-blue-600 hover:underline">github.com/HCo-Innova/AgenticForkSquad</a></p>
-              <p><strong>License:</strong> MIT</p>
+              <p><strong>License:</strong> AGPL-3.0</p>
             </div>
           </section>
         </div>

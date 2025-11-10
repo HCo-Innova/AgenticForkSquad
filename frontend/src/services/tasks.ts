@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from './api'
+import { apiGet, apiPost, apiDelete } from './api'
 
 export type Task = {
   id: number
@@ -7,6 +7,7 @@ export type Task = {
   target_query: string
   status: string
   created_at: string
+  completed_at?: string
 }
 
 export type Paginated<T> = {
@@ -36,4 +37,8 @@ export type CreateTaskInput = {
 
 export async function createTask(input: CreateTaskInput) {
   return apiPost<Task>(`/tasks`, input)
+}
+
+export async function deleteTask(id: number) {
+  return apiDelete(`/tasks/${id}`)
 }

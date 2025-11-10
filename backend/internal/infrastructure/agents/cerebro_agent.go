@@ -45,10 +45,10 @@ func (a *CerebroAgent) AnalyzeTask(ctx context.Context, task *entities.Task, for
 func (a *CerebroAgent) ProposeOptimization(ctx context.Context, analysis AnalysisResult, forkID string) (*entities.OptimizationProposal, error) {
 	if a == nil || a.LLM == nil { return nil, errors.New("agent not initialized") }
 	system := "You are Cerebro (Gemini 2.5 Pro). Propose an advanced strategy or materialized view. JSON only."
-	prompt := "Output fields: proposal_type, sql_commands[], rationale"
+	prompt := "Output fields: proposal_type (must be one of: index, partial_index, composite_index, materialized_view, partitioning, denormalization, query_rewrite), sql_commands[], rationale"
 	obj, err := a.LLM.SendMessageWithJSON(prompt, system)
 	if err != nil { return nil, err }
-	typeStr := getString(obj, "proposal_type")
+	typeStr := NormalizeProposalType(getString(obj, "proposal_type"))
 	cmds := getStringSlice(obj, "sql_commands")
 	rat := getString(obj, "rationale")
 	est := entities.EstimatedImpact{QueryTimeImprovement: 12, StorageOverheadMB: 4, Complexity: "medium", Risk: "medium"}
@@ -78,7 +78,11 @@ func (a *CerebroAgent) RunBenchmark(ctx context.Context, proposal *entities.Opti
 		for i := 0; i < 3; i++ {
 			qr, err := a.MCPQ.ExecuteQuery(ctx, forkID, q.sql, 60000)
 			if err != nil { return nil, err }
-			total += qr.ExecutionTimeMs
+			execTime := qr.ExecutionTimeMs
+			if execTime <= 0 {
+				execTime = 1.0 // fallback si MCP no devuelve tiempo
+			}
+			total += execTime
 		}
 		avg := total / 3
 		br := &entities.BenchmarkResult{

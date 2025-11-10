@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import toast from 'react-hot-toast'
+import { apiGet } from '../services/api'
 
 export default function SettingsPage() {
   const { user } = useAuth()
@@ -15,6 +16,7 @@ export default function SettingsPage() {
   const [refreshInterval, setRefreshInterval] = useState(
     parseInt(localStorage.getItem('refreshInterval') || '30')
   )
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   const handleThemeToggle = () => {
     toggleTheme()
@@ -41,9 +43,41 @@ export default function SettingsPage() {
     toast.success(`Refresh interval set to ${value} seconds`)
   }
 
-  const handleExportData = () => {
-    toast.success('Data export started (feature coming soon)')
-    // In a real implementation, this would trigger data export
+  const handleExportData = async () => {
+    try {
+      const toastId = toast.loading('Exporting data...')
+      
+      // Fetch all data in parallel
+      const [tasks, agents, analytics] = await Promise.all([
+        apiGet<any>('/tasks'),
+        apiGet<any>('/agents'),
+        apiGet<any>('/analytics/overview')
+      ])
+
+      // Create export object
+      const exportData = {
+        exported_at: new Date().toISOString(),
+        user: user?.email,
+        tasks: tasks?.data || [],
+        agents: agents?.data || [],
+        analytics: analytics?.data || {}
+      }
+
+      // Download as JSON file
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `afs-export-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      toast.success('Data exported successfully', { id: toastId })
+    } catch (error) {
+      toast.error('Failed to export data')
+    }
   }
 
   const handleClearCache = () => {
@@ -246,7 +280,7 @@ export default function SettingsPage() {
               <div className="text-xs text-gray-500">Permanently delete your account and all data</div>
             </div>
             <button
-              onClick={() => toast.error('Account deletion not implemented')}
+              onClick={() => setShowDeleteModal(true)}
               className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 transition-colors"
             >
               Delete
@@ -254,6 +288,43 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Delete Account</h3>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-sm text-gray-700 mb-4">
+                This action <strong>cannot be undone</strong>. This will permanently delete your account,
+                all tasks, agent executions, and analytics data.
+              </p>
+              <p className="text-sm text-red-600 font-medium">
+                Are you absolutely sure?
+              </p>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  toast.error('Account deletion requires backend endpoint implementation')
+                  setShowDeleteModal(false)
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors"
+              >
+                Yes, Delete My Account
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -32,7 +32,7 @@ func TestOrchestratorParallel(t *testing.T) {
 	ag3 := &mockAgentFail{}
 
 	task := &entities.Task{Type: entities.TaskTypeQueryOptimization, TargetQuery: "SELECT * FROM orders"}
-	props, benches, err := orch.ExecuteAgentsInParallel(context.Background(), task, []agents.Agent{ag1, ag2, ag3})
+	props, benches, err := orch.ExecuteAgentsInParallel(context.Background(), task, []agents.Agent{ag1, ag2, ag3}, []string{"fork1", "fork2", "fork3"}, []int64{1, 2, 3})
 	if err != nil { t.Fatalf("unexpected err (partial failures allowed): %v", err) }
 	if len(props) != 2 { t.Fatalf("expected 2 proposals, got %d", len(props)) }
 	if len(benches) != 2 { t.Fatalf("expected 2 benchmark result sets flattened, got %d", len(benches)) }

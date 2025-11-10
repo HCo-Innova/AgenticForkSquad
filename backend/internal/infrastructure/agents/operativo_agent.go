@@ -65,6 +65,31 @@ func (a *OperativoAgent) AnalyzeTask(ctx context.Context, task *entities.Task, f
 	return ar, nil
 }
 
+// NormalizeProposalType convierte variantes comunes del LLM a valores válidos
+func NormalizeProposalType(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.ReplaceAll(s, " ", "_")
+	s = strings.ReplaceAll(s, "-", "_")
+	switch s {
+	case "index", "create_index", "btree", "b_tree":
+		return "index"
+	case "partial_index", "filtered_index":
+		return "partial_index"
+	case "composite_index", "multi_column_index", "compound_index":
+		return "composite_index"
+	case "materialized_view", "matview", "mv":
+		return "materialized_view"
+	case "partitioning", "partition", "table_partition":
+		return "partitioning"
+	case "denormalization", "denormalize":
+		return "denormalization"
+	case "query_rewrite", "rewrite", "query_optimization":
+		return "query_rewrite"
+	default:
+		return s // devolver tal cual si no coincide con nada
+	}
+}
+
 func (a *OperativoAgent) ProposeOptimization(ctx context.Context, analysis AnalysisResult, forkID string) (*entities.OptimizationProposal, error) {
 	if a == nil || a.LLM == nil { return nil, errors.New("agent not initialized") }
 	system := "You are an Operativo (Gemini) agent. Propose an index optimization. Respond ONLY JSON."
@@ -78,7 +103,7 @@ func (a *OperativoAgent) ProposeOptimization(ctx context.Context, analysis Analy
 	obj, err := a.LLM.SendMessageWithJSON(prompt, system)
 	if err != nil { return nil, err }
 	// Parse essentials
-	typeStr := getString(obj, "proposal_type")
+	typeStr := NormalizeProposalType(getString(obj, "proposal_type"))
 	cmds := getStringSlice(obj, "sql_commands")
 	rat := getString(obj, "rationale")
 	// Minimal estimation
@@ -109,7 +134,11 @@ func (a *OperativoAgent) RunBenchmark(ctx context.Context, proposal *entities.Op
 		for i := 0; i < 3; i++ {
 			qr, err := a.MCPQ.ExecuteQuery(ctx, forkID, q.sql, 60000)
 			if err != nil { return nil, err }
-			total += qr.ExecutionTimeMs
+			execTime := qr.ExecutionTimeMs
+			if execTime <= 0 {
+				execTime = 1.0 // fallback si MCP no devuelve tiempo
+			}
+			total += execTime
 		}
 		avg := total / 3
 		br := &entities.BenchmarkResult{

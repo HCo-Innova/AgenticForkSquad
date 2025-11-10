@@ -74,3 +74,14 @@ func (s *TaskService) UpdateTaskStatus(ctx context.Context, id int, status entit
 	existing.Status = status
 	return s.repo.Update(ctx, existing)
 }
+
+// DeleteTask removes a task by ID.
+func (s *TaskService) DeleteTask(ctx context.Context, id int64) error {
+	if s == nil || s.repo == nil {
+		return errors.New("task service not initialized")
+	}
+	if id <= 0 {
+		return errors.New("invalid id")
+	}
+	return s.repo.Delete(ctx, int(id))
+}

@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -31,10 +32,11 @@ func NewOrchestrator() *Orchestrator { return &Orchestrator{} }
 
 // ExecuteAgentsInParallel ejecuta N agentes en paralelo con fork IDs reales y recopila propuestas y benchmarks.
 // Errores parciales son tolerados (si al menos uno entrega resultados).
-func (o *Orchestrator) ExecuteAgentsInParallel(ctx context.Context, task *entities.Task, ags []Agent, forkIDs []string) ([]*entities.OptimizationProposal, []*entities.BenchmarkResult, error) {
+func (o *Orchestrator) ExecuteAgentsInParallel(ctx context.Context, task *entities.Task, ags []Agent, forkIDs []string, agentExecIDs []int64) ([]*entities.OptimizationProposal, []*entities.BenchmarkResult, error) {
 	if task == nil { return nil, nil, errors.New("task is required") }
 	if len(ags) == 0 { return nil, nil, errors.New("no agents provided") }
 	if len(ags) != len(forkIDs) { return nil, nil, errors.New("agents and forkIDs count mismatch") }
+	if len(ags) != len(agentExecIDs) { return nil, nil, errors.New("agents and agentExecIDs count mismatch") }
 
 	var wg sync.WaitGroup
 	propCh := make(chan *entities.OptimizationProposal, len(ags))
@@ -43,7 +45,7 @@ func (o *Orchestrator) ExecuteAgentsInParallel(ctx context.Context, task *entiti
 
 	for i, a := range ags {
 		wg.Add(1)
-		go func(idx int, ag Agent, forkID string) {
+		go func(idx int, ag Agent, forkID string, execID int64) {
 			defer wg.Done()
 			// Timeout por agente: 10 minutos
 			aCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
@@ -54,13 +56,16 @@ func (o *Orchestrator) ExecuteAgentsInParallel(ctx context.Context, task *entiti
 			if err != nil { errCh <- err; return }
 			prop, err := ag.ProposeOptimization(aCtx, analysis, forkID)
 			if err != nil { errCh <- err; return }
-			// asignar ID simulado si no viene
-			if prop.ID == 0 { prop.ID = time.Now().UnixNano() }
+			// Asignar agent_execution_id
+			prop.AgentExecutionID = execID
+			// Asignar ID temporal para vincular benchmarks (será reemplazado por DB)
+			prop.ID = int64(idx + 1000) // offset para evitar colisiones
+			fmt.Printf("      🔗 Prop AgentExecutionID=%d tempID=%d assigned\n", execID, prop.ID)
 			res, err := ag.RunBenchmark(aCtx, prop, forkID)
 			if err != nil { errCh <- err; return }
 			propCh <- prop
 			benchCh <- res
-		}(i, a, forkIDs[i])
+		}(i, a, forkIDs[i], agentExecIDs[i])
 	}
 
 	wg.Wait()
@@ -119,7 +124,12 @@ func (o *Orchestrator) CleanupForks(ctx context.Context, forkIDs []string) error
 // agents ya seleccionados, consensus engine provisto, mainService y forkIDs a limpiar.
 func (o *Orchestrator) ExecuteTask(ctx context.Context, task *entities.Task, ags []Agent, ce *ConsensusEngine, mainService string, forkIDs []string) (*entities.ConsensusDecision, error) {
 	if task == nil || ce == nil { return nil, errors.New("invalid inputs") }
-	props, benches, err := o.ExecuteAgentsInParallel(ctx, task, ags, forkIDs)
+	// IDs simulados para tests
+	agentExecIDs := make([]int64, len(ags))
+	for i := range ags {
+		agentExecIDs[i] = int64(i + 1)
+	}
+	props, benches, err := o.ExecuteAgentsInParallel(ctx, task, ags, forkIDs, agentExecIDs)
 	if err != nil { return nil, err }
 	// Scoring criteria por defecto
 	criteria := entities.ScoringCriteria{PerformanceWeight: 0.5, StorageWeight: 0.2, ComplexityWeight: 0.2, RiskWeight: 0.1}

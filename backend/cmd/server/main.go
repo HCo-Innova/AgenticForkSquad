@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -14,35 +13,18 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 
-	cfgpkg "github.com/tuusuario/afs-challenge/internal/config"
-	"github.com/tuusuario/afs-challenge/internal/infrastructure/agents"
+	"github.com/tuusuario/afs-challenge/internal/config"
 	llm "github.com/tuusuario/afs-challenge/internal/infrastructure/llm"
 	"github.com/tuusuario/afs-challenge/internal/infrastructure/mcp"
 	repo "github.com/tuusuario/afs-challenge/internal/infrastructure/database/repositories"
 	httphandlers "github.com/tuusuario/afs-challenge/internal/presentation/http/handlers"
 	"github.com/tuusuario/afs-challenge/internal/presentation/http/routes"
 	"github.com/tuusuario/afs-challenge/internal/usecases"
-	"github.com/tuusuario/afs-challenge/internal/domain/values"
 )
-
-// agentFactory implements usecases.AgentFactory backed by pre-wired dependencies.
-type agentFactory struct {
-	mcp  *mcp.MCPClient
-	llms map[values.AgentType]llm.LLMClient
-	cfg  *cfgpkg.Config
-}
-
-func (f *agentFactory) New(t values.AgentType) (agents.Agent, error) {
-	client, ok := f.llms[t]
-	if !ok || client == nil {
-		return nil, fmt.Errorf("no LLM client for agent type %s", t)
-	}
-	return agents.NewAgent(t, f.mcp, client, f.cfg)
-}
 
 func main() {
 	// 1) Load config
-	cfg, err := cfgpkg.Load()
+	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("config error: %v", err)
 	}
@@ -90,17 +72,9 @@ func main() {
 	if err != nil { log.Fatalf("vertex operativo error: %v", err) }
 	llmBulk, err := llm.NewVertexClient(cfg, cfg.VertexAI.ModelBulk, nil)
 	if err != nil { log.Fatalf("vertex bulk error: %v", err) }
-
-	// 7) Initialize Agent Implementations and Factory
-	factory := &agentFactory{
-		mcp: mcpClient,
-		cfg: cfg,
-		llms: map[values.AgentType]llm.LLMClient{
-			values.AgentCerebro:  llmCerebro,
-			values.AgentOperativo: llmOperativo,
-			values.AgentBulk:      llmBulk,
-		},
-	}
+	_ = llmCerebro
+	_ = llmOperativo
+	_ = llmBulk
 
 	// 8) Initialize WebSocket Hub
 	hub := usecases.NewHub()
@@ -108,24 +82,30 @@ func main() {
 
 	// 9) Initialize Use Cases
 	taskSvc := usecases.NewTaskService(taskRepo)
-	router := usecases.NewRouter(factory)
-	benchRunner := usecases.NewBenchmarkRunner(mcpClient)
+	agentFactory := usecases.NewAgentFactory(mcpClient, agentExecRepo, cfg)
 	consEngine := usecases.NewConsensusEngine()
 	orch := usecases.NewOrchestrator()
-	// Wire Orchestrator MCP for later phases (apply/cleanup)
-	// Note: Orchestrator fields are intentionally minimal; tests use injected methods
-	_ = benchRunner
-	_ = consEngine
-	_ = router
-	_ = taskSvc
-	_ = hub
-	_ = orch
+	taskProcessor := usecases.NewTaskProcessor(
+		taskRepo,
+		agentExecRepo,
+		optRepo,
+		benchRepo,
+		consRepo,
+		orch,
+		consEngine,
+		hub,
+		agentFactory,
+		cfg.TigerCloud.MainService,
+	)
 
 	// 10) Initialize HTTP Handlers and Router
 	app := fiber.New()
-	taskHandler := httphandlers.NewTaskHandler(taskSvc, hub)
+	taskHandler := httphandlers.NewTaskHandler(taskSvc, taskProcessor, hub)
 	resultsHandler := httphandlers.NewResultsHandler(agentExecRepo, optRepo, benchRepo, consRepo, hub)
-	routes.SetupRoutes(app, hub, taskHandler, resultsHandler)
+	authHandler := httphandlers.NewAuthHandler(nil)
+	metricsHandler := httphandlers.NewMetricsHandler(db)
+	authSvc := usecases.NewAuthService(nil, "dummy-jwt-secret")
+	routes.SetupRoutes(app, hub, taskHandler, resultsHandler, authHandler, authSvc, metricsHandler)
 
 	// Middleware básicos (CORS/logging) pueden agregarse aquí si están implementados
 	// app.Use(middleware.CORS())

@@ -23,6 +23,35 @@ func NewResultsHandler(exec domainif.AgentExecutionRepository, opt domainif.Opti
 	return &ResultsHandler{ExecRepo: exec, OptRepo: opt, BenchRepo: bench, ConsRepo: cons, Hub: hub}
 }
 
+// GET /api/v1/agents
+func (h *ResultsHandler) ListAllAgents(c *fiber.Ctx) error {
+	if h == nil || h.ExecRepo == nil {
+		return c.Status(500).JSON(fiber.Map{"error": fiber.Map{"code": "INTERNAL_ERROR", "message": "repositories not available", "timestamp": time.Now().UTC().Format(time.RFC3339)}})
+	}
+	execs, err := h.ExecRepo.List(c.Context())
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": fiber.Map{"code": "INTERNAL_ERROR", "message": err.Error(), "timestamp": time.Now().UTC().Format(time.RFC3339)}})
+	}
+	resp := make([]fiber.Map, 0, len(execs))
+	for _, e := range execs {
+		m := fiber.Map{
+			"id":           e.ID,
+			"task_id":      e.TaskID,
+			"agent_type":   e.AgentType,
+			"fork_id":      e.ForkID,
+			"status":       e.Status,
+			"started_at":   e.StartedAt.Format(time.RFC3339),
+			"completed_at": nil,
+			"error":        e.ErrorMsg,
+		}
+		if e.CompletedAt != nil {
+			m["completed_at"] = e.CompletedAt.Format(time.RFC3339)
+		}
+		resp = append(resp, m)
+	}
+	return c.JSON(fiber.Map{"data": resp})
+}
+
 // GET /api/v1/tasks/:id/agents
 func (h *ResultsHandler) GetTaskAgents(c *fiber.Ctx) error {
 	if h == nil || h.ExecRepo == nil {

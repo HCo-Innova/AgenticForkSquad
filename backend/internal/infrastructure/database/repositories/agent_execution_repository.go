@@ -77,6 +77,16 @@ func (r *PostgresAgentExecutionRepository) GetByTaskID(ctx context.Context, task
 	return out, nil
 }
 
+func (r *PostgresAgentExecutionRepository) List(ctx context.Context) ([]*entities.AgentExecution, error) {
+	if r.db == nil { return nil, errors.New("nil db") }
+	q := `SELECT id, task_id, agent_type, fork_id, status, started_at, completed_at, error_message FROM agent_executions ORDER BY started_at DESC LIMIT 100`
+	rows := []agentExecRow{}
+	if err := r.db.SelectContext(ctx, &rows, q); err != nil { return nil, err }
+	out := make([]*entities.AgentExecution, 0, len(rows))
+	for _, rr := range rows { out = append(out, rr.toEntity()) }
+	return out, nil
+}
+
 func (r *PostgresAgentExecutionRepository) Update(ctx context.Context, exec *entities.AgentExecution) error {
 	if r.db == nil { return errors.New("nil db") }
 	if exec.ID == 0 { return errors.New("missing id") }

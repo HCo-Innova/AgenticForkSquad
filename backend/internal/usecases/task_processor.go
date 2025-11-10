@@ -87,9 +87,11 @@ func (p *TaskProcessor) ProcessTask(ctx context.Context, taskID int64) error {
 
 	var agentInstances []Agent
 	var forkIDs []string
+	var agentExecutionIDs []int64
 
 	// 4. Crear agentes y forks reales via MCP
 	for _, agentType := range agentTypes {
+		fmt.Printf("      🔨 Creating agent: %s\n", agentType)
 		agent, err := p.agentFactory.CreateAgent(agentType)
 		if err != nil {
 			return fmt.Errorf("failed to create agent %s: %w", agentType, err)
@@ -104,10 +106,25 @@ func (p *TaskProcessor) ProcessTask(ctx context.Context, taskID int64) error {
 		}
 		forkIDs = append(forkIDs, forkID)
 
+		// Crear registro de agent_execution en DB
+		agentExec := &entities.AgentExecution{
+			TaskID:     int64(taskID),
+			AgentType:  agentType,
+			ForkID:     forkID,
+			Status:     "running",
+			StartedAt:  time.Now().UTC(),
+		}
+		if err := p.agentExecRepo.Create(ctx, agentExec); err != nil {
+			return fmt.Errorf("failed to create agent execution record: %w", err)
+		}
+		fmt.Printf("      ✅ Created agent_execution ID=%d for task=%d agent=%s\n", agentExec.ID, taskID, agentType)
+		agentExecutionIDs = append(agentExecutionIDs, agentExec.ID)
+
 		p.broadcastEvent(EventForkCreated, map[string]interface{}{
 			"task_id":    taskID,
 			"agent_type": agentType,
 			"fork_id":    forkID,
+			"execution_id": agentExec.ID,
 		})
 	}
 
@@ -119,7 +136,7 @@ func (p *TaskProcessor) ProcessTask(ctx context.Context, taskID int64) error {
 	})
 
 	// 6. Ejecutar agentes en paralelo usando orchestrator con forks reales
-	proposals, benchmarks, err := p.orchestrator.ExecuteAgentsInParallel(ctx, task, agentInstances, forkIDs)
+	proposals, benchmarks, err := p.orchestrator.ExecuteAgentsInParallel(ctx, task, agentInstances, forkIDs, agentExecutionIDs)
 	if err != nil {
 		task.Status = entities.TaskStatusFailed
 		p.taskRepo.Update(ctx, task)
@@ -130,33 +147,50 @@ func (p *TaskProcessor) ProcessTask(ctx context.Context, taskID int64) error {
 		return fmt.Errorf("agent execution failed: %w", err)
 	}
 
-	// 7. Guardar propuestas y benchmarks
-	for _, prop := range proposals {
-		// Asegurarnos de que TaskID esté seteado
-		if prop.AgentExecutionID == 0 {
-			prop.AgentExecutionID = 1 // TODO: obtener del agent execution real
-		}
+	// 7. Guardar propuestas primero (para obtener IDs autogenerados por DB)
+	proposalIDMap := make(map[int64]int64) // old ID -> new ID
+	for i, prop := range proposals {
+		oldID := prop.ID
 		if err := p.proposalRepo.Create(ctx, prop); err != nil {
 			return fmt.Errorf("failed to save proposal: %w", err)
 		}
+		proposalIDMap[oldID] = prop.ID
+		
 		p.broadcastEvent(EventProposalSubmitted, map[string]interface{}{
 			"task_id":     taskID,
 			"proposal_id": prop.ID,
 			"type":        prop.ProposalType,
+			"agent_index": i,
 		})
 	}
 
+	// 8. Actualizar proposal_id en benchmarks y guardarlos
 	for _, bench := range benchmarks {
+		// Mapear el ID temporal al ID real de la DB
+		if newID, ok := proposalIDMap[bench.ProposalID]; ok {
+			bench.ProposalID = newID
+		}
 		if err := p.benchmarkRepo.Create(ctx, bench); err != nil {
 			return fmt.Errorf("failed to save benchmark: %w", err)
 		}
 	}
 
-	// 8. Ejecutar consenso
+	// 9. Ejecutar consenso
 	p.broadcastEvent(EventBenchmarkCompleted, map[string]interface{}{
 		"task_id":   taskID,
 		"proposals": len(proposals),
 	})
+
+	// Marcar agent_executions como completados
+	for _, execID := range agentExecutionIDs {
+		exec, err := p.agentExecRepo.GetByID(ctx, int(execID))
+		if err == nil && exec != nil {
+			exec.Status = entities.ExecutionCompleted
+			now := time.Now().UTC()
+			exec.CompletedAt = &now
+			p.agentExecRepo.Update(ctx, exec)
+		}
+	}
 
 	criteria := entities.ScoringCriteria{
 		PerformanceWeight: 0.5,
@@ -174,6 +208,24 @@ func (p *TaskProcessor) ProcessTask(ctx context.Context, taskID int64) error {
 			"error":   fmt.Sprintf("consensus failed: %v", err),
 		})
 		return fmt.Errorf("consensus failed: %w", err)
+	}
+
+	// Actualizar proposals con score_breakdown calculado por consenso
+	scoreAgentTypes := []values.AgentType{values.AgentCerebro, values.AgentOperativo, values.AgentBulk}
+	for i, prop := range proposals {
+		agentType := scoreAgentTypes[i]
+		if score, ok := decision.AllScores[agentType]; ok {
+			prop.EstimatedImpact.ScoreBreakdown = map[string]float64{
+				"performance":    score.Performance,
+				"storage":        score.Storage,
+				"complexity":     score.Complexity,
+				"risk":           score.Risk,
+				"weighted_total": score.WeightedTotal,
+			}
+			if updateErr := p.proposalRepo.Update(ctx, prop); updateErr != nil {
+				fmt.Printf("Warning: failed to update proposal %d with scores: %v\n", prop.ID, updateErr)
+			}
+		}
 	}
 
 	// 9. Guardar decisión de consenso
