@@ -58,6 +58,9 @@ func Load() (*Config, error) {
 
 	// Server
 	cfg.Server.Host = os.Getenv("HOST")
+	if cfg.Server.Host == "" {
+		cfg.Server.Host = "0.0.0.0" // Default to bind all interfaces for containers
+	}
 	cfg.Server.Port = os.Getenv("PORT")
 	cfg.Server.Environment = os.Getenv("ENV")
 	cfg.Server.LogLevel = os.Getenv("LOG_LEVEL")
