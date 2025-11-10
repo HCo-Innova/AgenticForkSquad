@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 
+const API_BASE = (import.meta.env.VITE_API_URL as string) || ''
+
 interface User {
   id: number
   email: string
@@ -41,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null)
     
     try {
-      const response = await fetch('/auth/login', {
+      const response = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -77,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null)
     
     try {
-      const response = await fetch('/auth/register', {
+      const response = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, full_name: fullName })

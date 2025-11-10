@@ -14,9 +14,9 @@ import (
 	_ "github.com/lib/pq"
 
 	"github.com/tuusuario/afs-challenge/internal/config"
+	"github.com/tuusuario/afs-challenge/internal/infrastructure/database/repositories"
 	llm "github.com/tuusuario/afs-challenge/internal/infrastructure/llm"
 	"github.com/tuusuario/afs-challenge/internal/infrastructure/mcp"
-	repo "github.com/tuusuario/afs-challenge/internal/infrastructure/database/repositories"
 	httphandlers "github.com/tuusuario/afs-challenge/internal/presentation/http/handlers"
 	"github.com/tuusuario/afs-challenge/internal/presentation/http/routes"
 	"github.com/tuusuario/afs-challenge/internal/usecases"
@@ -46,14 +46,14 @@ func main() {
 	}
 
 	// 4) Initialize repositories
-	taskRepo := repo.NewPostgresTaskRepository(db)
-	agentExecRepo := repo.NewPostgresAgentExecutionRepository(db)
+	taskRepo := repositories.NewPostgresTaskRepository(db)
+	agentExecRepo := repositories.NewPostgresAgentExecutionRepository(db)
 	_ = agentExecRepo // wired later where needed
-	optRepo := repo.NewPostgresOptimizationRepository(db)
+	optRepo := repositories.NewPostgresOptimizationRepository(db)
 	_ = optRepo
-	benchRepo := repo.NewPostgresBenchmarkRepository(db)
+	benchRepo := repositories.NewPostgresBenchmarkRepository(db)
 	_ = benchRepo
-	consRepo := repo.NewPostgresConsensusRepository(db)
+	consRepo := repositories.NewPostgresConsensusRepository(db)
 	_ = consRepo
 
 	// 5) Initialize MCP client
@@ -104,7 +104,7 @@ func main() {
 	resultsHandler := httphandlers.NewResultsHandler(agentExecRepo, optRepo, benchRepo, consRepo, hub)
 	
 	// Create AuthService with UserRepository
-	userRepo := database.NewUserRepository(db)
+	userRepo := repositories.NewPostgresUserRepository(db)
 	authSvc := usecases.NewAuthService(userRepo, "afs-jwt-secret-2024")
 	authHandler := httphandlers.NewAuthHandler(authSvc)
 	metricsHandler := httphandlers.NewMetricsHandler(db)
