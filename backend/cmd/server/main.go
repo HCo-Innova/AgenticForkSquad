@@ -102,9 +102,12 @@ func main() {
 	app := fiber.New()
 	taskHandler := httphandlers.NewTaskHandler(taskSvc, taskProcessor, hub)
 	resultsHandler := httphandlers.NewResultsHandler(agentExecRepo, optRepo, benchRepo, consRepo, hub)
-	authHandler := httphandlers.NewAuthHandler(nil)
+	
+	// Create AuthService with UserRepository
+	userRepo := database.NewUserRepository(db)
+	authSvc := usecases.NewAuthService(userRepo, "afs-jwt-secret-2024")
+	authHandler := httphandlers.NewAuthHandler(authSvc)
 	metricsHandler := httphandlers.NewMetricsHandler(db)
-	authSvc := usecases.NewAuthService(nil, "dummy-jwt-secret")
 	
 	// CORS middleware - allow Vercel frontend
 	app.Use(func(c *fiber.Ctx) error {
