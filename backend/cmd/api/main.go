@@ -32,8 +32,15 @@ func main() {
 	cfg := config.Load()
 	applogger.Info("🔧 Configuration loaded")
 	applogger.Info("Environment: " + cfg.Environment)
-	if err := cfg.ValidateTiger(); err != nil {
-		log.Fatalf("Tiger Cloud config error: %v", err)
+	
+	// Validate Tiger Cloud only if enabled
+	if cfg.UseTigerCloud {
+		if err := cfg.ValidateTiger(); err != nil {
+			log.Fatalf("Tiger Cloud config error: %v", err)
+		}
+		applogger.Info("✅ Tiger Cloud configuration validated")
+	} else {
+		applogger.Info("ℹ️  Tiger Cloud disabled - using direct database connections")
 	}
 
 	// ============================================
