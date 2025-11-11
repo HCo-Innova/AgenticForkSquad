@@ -49,9 +49,9 @@ export default function SettingsPage() {
       
       // Fetch all data in parallel
       const [tasks, agents, analytics] = await Promise.all([
-        apiGet<any>('/api/v1/tasks'),
-        apiGet<any>('/api/v1/agents'),
-        apiGet<any>('/api/v1/metrics/overview')
+        apiGet<any>('/tasks'),
+        apiGet<any>('/agents'),
+        apiGet<any>('/metrics/overview')
       ])
 
       // Create export object

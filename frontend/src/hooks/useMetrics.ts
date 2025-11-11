@@ -33,19 +33,19 @@ export function useMetrics() {
 
   const overview = useQuery<DashboardMetrics>({
     queryKey: ['metrics', 'overview'],
-    queryFn: () => fetchWithAuth('/api/v1/metrics/overview'),
+    queryFn: () => fetchWithAuth('/metrics/overview'),
     refetchInterval: 30000, // 30s
   })
 
   const agents = useQuery<AgentMetrics[]>({
     queryKey: ['metrics', 'agents'],
-    queryFn: () => fetchWithAuth('/api/v1/metrics/agents'),
+    queryFn: () => fetchWithAuth('/metrics/agents'),
     refetchInterval: 30000,
   })
 
   const performance = useQuery<PerformanceData[]>({
     queryKey: ['metrics', 'performance'],
-    queryFn: () => fetchWithAuth('/api/v1/metrics/performance?days=7'),
+    queryFn: () => fetchWithAuth('/metrics/performance?days=7'),
     refetchInterval: 60000, // 1min
   })
 

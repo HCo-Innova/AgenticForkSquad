@@ -1,3 +1,4 @@
+import { API_BASE } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 
 export function useApi() {
@@ -10,7 +11,8 @@ export function useApi() {
       ...options.headers,
     }
 
-    const response = await fetch(url, { ...options, headers })
+    const fullUrl = url.startsWith('http') ? url : `${API_BASE}${url}`
+    const response = await fetch(fullUrl, { ...options, headers })
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Request failed' }))

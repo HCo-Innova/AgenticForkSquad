@@ -11,7 +11,7 @@ export type Proposal = {
 }
 
 export async function listProposalsByTask(taskId: number) {
-  return apiGet<{ data: Proposal[] }>(`/api/v1/tasks/${taskId}/proposals`)
+  return apiGet<{ data: Proposal[] }>(`/tasks/${taskId}/proposals`)
 }
 
 export type Benchmark = {
@@ -27,5 +27,5 @@ export type Benchmark = {
 }
 
 export async function listBenchmarksByProposal(proposalId: number) {
-  return apiGet<{ data: Benchmark[] }>(`/api/v1/proposals/${proposalId}/benchmarks`)
+  return apiGet<{ data: Benchmark[] }>(`/proposals/${proposalId}/benchmarks`)
 }
