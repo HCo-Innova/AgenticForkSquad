@@ -62,6 +62,9 @@ func Load() (*Config, error) {
 		cfg.Server.Host = "0.0.0.0" // Default to bind all interfaces for containers
 	}
 	cfg.Server.Port = os.Getenv("PORT")
+	if cfg.Server.Port == "" {
+		cfg.Server.Port = "8000" // Default for Railway
+	}
 	cfg.Server.Environment = os.Getenv("ENV")
 	cfg.Server.LogLevel = os.Getenv("LOG_LEVEL")
 
@@ -201,9 +204,6 @@ func Load() (*Config, error) {
 }
 
 func (c *Config) validate() error {
-	if c.Server.Port == "" {
-		return errors.New("missing required environment variable: PORT")
-	}
 	if c.Server.Environment == "" {
 		return errors.New("missing required environment variable: ENV")
 	}
