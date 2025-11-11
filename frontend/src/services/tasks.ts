@@ -22,11 +22,11 @@ export async function listTasks(params?: { status?: string; type?: string; limit
   if (params?.limit != null) q.set('limit', String(params.limit))
   if (params?.offset != null) q.set('offset', String(params.offset))
   const qs = q.toString() ? `?${q.toString()}` : ''
-  return apiGet<Paginated<Task>>(`/tasks${qs}`)
+  return apiGet<Paginated<Task>>(`/api/v1/tasks${qs}`)
 }
 
 export async function getTask(id: number) {
-  return apiGet<Task>(`/tasks/${id}`)
+  return apiGet<Task>(`/api/v1/tasks/${id}`)
 }
 
 export type CreateTaskInput = {
@@ -36,9 +36,9 @@ export type CreateTaskInput = {
 }
 
 export async function createTask(input: CreateTaskInput) {
-  return apiPost<Task>(`/tasks`, input)
+  return apiPost<Task>(`/api/v1/tasks`, input)
 }
 
 export async function deleteTask(id: number) {
-  return apiDelete(`/tasks/${id}`)
+  return apiDelete(`/api/v1/tasks/${id}`)
 }
