@@ -17,9 +17,9 @@ export type AgentExecution = {
 }
 
 export async function listAgents() {
-  return apiGet<{ message?: string; data?: Agent[] }>(`/agents/`)
+  return apiGet<{ message?: string; data?: Agent[] }>(`/api/v1/agents/`)
 }
 
 export async function getAgentsByTask(taskId: number) {
-  return apiGet<{ data: AgentExecution[] }>(`/tasks/${taskId}/agents`)
+  return apiGet<{ data: AgentExecution[] }>(`/api/v1/tasks/${taskId}/agents`)
 }
