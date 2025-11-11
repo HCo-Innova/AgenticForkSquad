@@ -27,26 +27,21 @@ RUN go build \
     ./cmd/api
 
 # ============================================
-# Stage 2: Production (Distroless)
+# Stage 2: Production (Distroless base con libc)
 # ============================================
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/base-debian12:nonroot
 
 LABEL maintainer="tu-email@ejemplo.com"
 LABEL org.opencontainers.image.source="https://github.com/tuusuario/afs-challenge"
 
 WORKDIR /app
 
-# Copy ca-certs y timezone
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
-
 # Copy binario
-COPY --from=builder --chown=nonroot:nonroot /build/app /app/app
+COPY --from=builder /build/app /app/app
 
-# Ya viene como nonroot (UID 65532)
+# Run as nonroot user (UID 65532)
+USER 65532:65532
+
 EXPOSE 8000
-
-# Healthcheck (se hace en docker-compose con curl externo)
-# HEALTHCHECK no funciona en distroless
 
 ENTRYPOINT ["/app/app"]
