@@ -205,10 +205,11 @@ func main() {
 	// ============================================
 	// 11. Start Server
 	// ============================================
-	applogger.Info("🚀 Server starting on port " + cfg.Port)
+	listenAddr := "0.0.0.0:" + cfg.Port
+	applogger.Info("🚀 Server starting on " + listenAddr)
 	applogger.Info("Environment: " + cfg.Environment)
 
-	if err := app.Listen(":" + cfg.Port); err != nil {
+	if err := app.Listen(listenAddr); err != nil {
 		log.Fatalf("❌ Failed to start server: %v", err)
 	}
 }
@@ -218,8 +219,12 @@ func main() {
 // ============================================
 
 func getAllowedOrigins(env string) string {
+	origins := os.Getenv("ALLOWED_ORIGINS")
+	if origins != "" {
+		return origins
+	}
 	if env == "production" {
-		return "https://yourdomain.com"
+		return "*"
 	}
 	return "*"
 }
