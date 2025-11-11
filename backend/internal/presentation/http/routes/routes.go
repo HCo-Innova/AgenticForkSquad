@@ -18,17 +18,17 @@ func SetupRoutes(app *fiber.App, hub *usecases.Hub, taskH *handlers.TaskHandler,
     app.Get("/health/ready", handlers.Readiness)
 
     // ============================================
-    // Authentication (Public)
-    // ============================================
-    auth := app.Group("/auth")
-    auth.Post("/login", authH.Login)
-    auth.Post("/register", authH.Register)
-    auth.Get("/me", middleware.AuthMiddleware(authSvc), authH.Me)
-
-    // ============================================
     // API v1 Routes
     // ============================================
     api := app.Group("/api/v1")
+
+    // ============================================
+    // Authentication (Public - under /api/v1)
+    // ============================================
+    auth := api.Group("/auth")
+    auth.Post("/login", authH.Login)
+    auth.Post("/register", authH.Register)
+    auth.Get("/me", middleware.AuthMiddleware(authSvc), authH.Me)
 
     // Root endpoint
     api.Get("/", func(c *fiber.Ctx) error {
