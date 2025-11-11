@@ -46,16 +46,24 @@ func NewVertexClient(cfg *cfgpkg.Config, model string, httpClient Doer) (*Vertex
 	if httpClient == nil {
 		// Use Application Default Credentials
 		ctx := context.Background()
-		credsFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
-		if credsFile != "" {
-			credsJSON, err := os.ReadFile(credsFile)
+		var credsJSON []byte
+		var err error
+		
+		// Opción 1: Leer desde variable de entorno GCP_CREDENTIALS_JSON (Railway)
+		if credsStr := os.Getenv("GCP_CREDENTIALS_JSON"); credsStr != "" {
+			credsJSON = []byte(credsStr)
+		} else if credsFile := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"); credsFile != "" {
+			// Opción 2: Leer desde archivo (desarrollo local)
+			credsJSON, err = os.ReadFile(credsFile)
+		}
+		
+		if credsJSON != nil && err == nil {
+			creds, err := google.CredentialsFromJSON(ctx, credsJSON, "https://www.googleapis.com/auth/cloud-platform")
 			if err == nil {
-				creds, err := google.CredentialsFromJSON(ctx, credsJSON, "https://www.googleapis.com/auth/cloud-platform")
-				if err == nil {
-					httpClient = oauth2.NewClient(ctx, creds.TokenSource)
-				}
+				httpClient = oauth2.NewClient(ctx, creds.TokenSource)
 			}
 		}
+		
 		// Fallback if ADC fails
 		if httpClient == nil {
 			httpClient = &http.Client{Timeout: 30 * time.Second}
